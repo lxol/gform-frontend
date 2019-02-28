@@ -17,9 +17,10 @@
 package uk.gov.hmrc.gform.controllers.helpers
 
 import play.api.mvc.Results._
-import play.api.mvc.{ AnyContent, Request, Result }
-import uk.gov.hmrc.gform.sharedmodel.form.{ FormData, FormId }
-import uk.gov.hmrc.gform.sharedmodel.formtemplate.{ FormComponentId, Group }
+import play.api.mvc.{AnyContent, Request, Result}
+import shapeless.test
+import uk.gov.hmrc.gform.sharedmodel.form.{FormData, FormId}
+import uk.gov.hmrc.gform.sharedmodel.formtemplate.{FormComponentId, Group}
 
 import scala.concurrent.Future
 import uk.gov.hmrc.http.HeaderCarrier
@@ -39,6 +40,9 @@ object FormDataHelpers {
       case None =>
         Future.successful(BadRequest("Cannot parse body as FormUrlEncoded")) // Thank you play-authorised-frontend for forcing me to do this check
     }
+
+  def removeCommas(input: Map[FormComponentId, Seq[String]]): Map[FormComponentId, Seq[String]] =
+    input.map{case (c,v) => (c, Seq(v.reduceLeft(_ + _).replace(",","")))}
 
   def get(data: Map[FormComponentId, Seq[String]], id: FormComponentId): List[String] =
     data.get(id).toList.flatten
