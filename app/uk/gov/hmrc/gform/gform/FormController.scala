@@ -77,9 +77,11 @@ class FormController(
                      case (validationResult, _, _) =>
                        (
                          ValidationUtil.isFormValid(validationResult.toMap),
-                         FormData(validationResult.flatMap(_._2.toFormField)))
+                         FormData(validationResult.flatMap(_._2.toFormField))) // .map({case (IsText(x),y) if x.constraint == Sterling => y.getCurrentValue.fold()(v => v.replace(",",""))
                    }
     } yield formData
+
+  def stripCommas(s: String): String = s.replace(",","")
 
   private def fastForwardValidate(processData: ProcessData, cache: AuthCacheWithForm)(
     implicit request: Request[AnyContent]
