@@ -21,16 +21,14 @@ import cats.instances.future._
 import cats.syntax.applicative._
 import play.api.i18n.I18nSupport
 import play.api.mvc._
-import uk.gov.hmrc.auth.core.AffinityGroup
-import uk.gov.hmrc.gform.auth.models.{ IsAgent, MaterialisedRetrievals, UserDetails }
+import uk.gov.hmrc.gform.auth.models.{ IsAgent, MaterialisedRetrievals }
 import uk.gov.hmrc.gform.config.{ AppConfig, FrontendAppConfig }
 import uk.gov.hmrc.gform.controllers._
 import uk.gov.hmrc.gform.controllers.helpers.FormDataHelpers.processResponseDataFromBody
 import uk.gov.hmrc.gform.controllers.helpers._
 import uk.gov.hmrc.gform.fileupload.{ Envelope, FileUploadService }
 import uk.gov.hmrc.gform.gformbackend.GformConnector
-import uk.gov.hmrc.gform.graph.{ Data, Recalculation }
-import uk.gov.hmrc.gform.keystore.RepeatingComponentService
+import uk.gov.hmrc.gform.graph.Data
 import uk.gov.hmrc.gform.models.{ AgentAccessCode, ProcessData, ProcessDataService }
 import uk.gov.hmrc.gform.models.ExpandUtils._
 import uk.gov.hmrc.gform.obligation.ObligationService
@@ -74,14 +72,29 @@ class FormController(
     for {
       formData <- validate(data, sections, sn, cache.form.envelopeId, cache.retrievals, cache.formTemplate)
                    .map {
-                     case (validationResult, _, _) =>
-                       (
-                         ValidationUtil.isFormValid(validationResult.toMap),
-                         FormData(validationResult.flatMap(_._2.toFormField))) // .map({case (IsText(x),y) if x.constraint == Sterling => y.getCurrentValue.fold()(v => v.replace(",",""))
+                     case (validationResult, _, _) => {
+                       val isFormValid = ValidationUtil.isFormValid(validationResult.toMap)
+
+                       val formComponents = if (isFormValid) validationResult.map {
+                         case (formComponent, formFiledValidationR) =>
+                           formComponent match {
+                             case text if IsText
+                                   .unapply(text)
+                                   .map(e => e.constraint.isInstanceOf[Sterling])
+                                   .getOrElse(false) =>
+                               (formComponent,
+                                 FieldOk(formComponent,
+                                   formFiledValidationR.getCurrentValue.getOrElse("").replaceAll(",", "")))
+                             case _ => (formComponent, formFiledValidationR)
+                           }
+                       } else validationResult
+
+                       (isFormValid, FormData(formComponents.flatMap(_._2.toFormField)))
+                     }
                    }
     } yield formData
 
-  def stripCommas(s: String): String = s.replace(",","")
+  def stripCommas(s: String): String = s.replace(",", "")
 
   private def fastForwardValidate(processData: ProcessData, cache: AuthCacheWithForm)(
     implicit request: Request[AnyContent]
