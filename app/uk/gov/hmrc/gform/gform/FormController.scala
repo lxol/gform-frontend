@@ -57,7 +57,8 @@ class FormController(
   renderer: SectionRenderingService,
   gformConnector: GformConnector,
   processDataService: ProcessDataService[Future, Throwable],
-  obligationService: ObligationService
+  obligationService: ObligationService,
+  formService: FormService
 ) extends FrontendController {
 
   import i18nSupport._
@@ -75,25 +76,12 @@ class FormController(
                      case (validationResult, _, _) => {
 
                        val isFormValid = ValidationUtil.isFormValid(validationResult.toMap)
-                       val formComponents = if (isFormValid) validationResult.map {
+                       val formComponents =
+                         if (isFormValid) formService.removeCommas(validationResult) else validationResult
 
-                         case (formComponent, formFiledValidationR) =>
-                           formComponent match {
-                             case text
-                                 if IsText
-                                   .unapply(text)
-                                   .map(e => e.constraint.isInstanceOf[Sterling])
-                                   .getOrElse(false) =>
-                               (
-                                 formComponent,
-                                 FieldOk(
-                                   formComponent,
-                                   formFiledValidationR.getCurrentValue.getOrElse("").replaceAll(",", "")))
-                             case _ => (formComponent, formFiledValidationR)
-                           }
-                       } else validationResult
-
-                       (isFormValid, FormData(formComponents.flatMap(_._2.toFormField)))
+                       (isFormValid, FormData(formComponents.flatMap {
+                         case (_, formFieldValidationResult) => formFieldValidationResult.toFormField
+                       }))
                      }
                    }
     } yield formData
