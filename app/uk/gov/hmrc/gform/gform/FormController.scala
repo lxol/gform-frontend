@@ -37,7 +37,7 @@ import uk.gov.hmrc.gform.sharedmodel.form._
 import uk.gov.hmrc.gform.sharedmodel.formtemplate.{ UserId => _, _ }
 import uk.gov.hmrc.gform.sharedmodel.formtemplate.SectionTitle4Ga._
 import uk.gov.hmrc.gform.validation.ValidationUtil.ValidatedType
-import uk.gov.hmrc.gform.validation.{ FormFieldValidationResult, ValidationService, ValidationUtil }
+import uk.gov.hmrc.gform.validation.{ FieldOk, FormFieldValidationResult, ValidationService, ValidationUtil }
 import uk.gov.hmrc.gform.views.html.form._
 import uk.gov.hmrc.gform.views.html.hardcoded.pages._
 import uk.gov.hmrc.http.{ HeaderCarrier, NotFoundException }
@@ -73,17 +73,21 @@ class FormController(
       formData <- validate(data, sections, sn, cache.form.envelopeId, cache.retrievals, cache.formTemplate)
                    .map {
                      case (validationResult, _, _) => {
-                       val isFormValid = ValidationUtil.isFormValid(validationResult.toMap)
 
+                       val isFormValid = ValidationUtil.isFormValid(validationResult.toMap)
                        val formComponents = if (isFormValid) validationResult.map {
+
                          case (formComponent, formFiledValidationR) =>
                            formComponent match {
-                             case text if IsText
+                             case text
+                                 if IsText
                                    .unapply(text)
                                    .map(e => e.constraint.isInstanceOf[Sterling])
                                    .getOrElse(false) =>
-                               (formComponent,
-                                 FieldOk(formComponent,
+                               (
+                                 formComponent,
+                                 FieldOk(
+                                   formComponent,
                                    formFiledValidationR.getCurrentValue.getOrElse("").replaceAll(",", "")))
                              case _ => (formComponent, formFiledValidationR)
                            }
@@ -93,8 +97,6 @@ class FormController(
                      }
                    }
     } yield formData
-
-  def stripCommas(s: String): String = s.replace(",", "")
 
   private def fastForwardValidate(processData: ProcessData, cache: AuthCacheWithForm)(
     implicit request: Request[AnyContent]
