@@ -260,8 +260,7 @@ class StructuredFormDataBuilderSpec extends Spec {
       null,
       VisitIndex(Set(1)),
       ThirdPartyData.empty,
-      None,
-      ObligationsResponse(None)
+      None
     )
 
   def createFormTemplate(

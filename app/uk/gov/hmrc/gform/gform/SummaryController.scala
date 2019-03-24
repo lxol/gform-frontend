@@ -95,8 +95,7 @@ class SummaryController(
               cache.form.formData,
               Validated,
               cache.form.visitsIndex,
-              cache.form.thirdPartyData,
-              cache.form.obligationsResponse
+              cache.form.thirdPartyData
             )
           )
           .map { _ =>

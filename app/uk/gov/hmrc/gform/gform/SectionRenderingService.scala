@@ -518,7 +518,7 @@ class SectionRenderingService(frontendAppConfig: FrontendAppConfig)(
     data: FormDataRecalculated,
     obligations: ObligationsResponse,
     hmrcTP: HmrcTaxPeriod) = {
-    println("[htmlForHmrcTaxPeriod] obligations: " + (obligations))
+
     val taxPeriodOptions: List[OptionParams] = obligations.obligationsResponse match {
       case Some(nel) =>
         nel.find(_.id.hmrcTaxPeriod == hmrcTP) match {

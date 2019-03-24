@@ -94,7 +94,7 @@ class ProcessDataService[F[_]: Monad, E](recalculation: Recalculation[F, E]) {
     after: Map[(FormComponentId, HmrcTaxPeriod), IdNumberValue],
     cache: AuthCacheWithForm)(implicit taxPeriodConnect: TaxPeriodConnect[F]): F[ObligationsResponse] =
     if (needRefresh(before, after)) fetchTaxResponses(before).map(ObligationsResponse(_))
-    else cache.form.obligationsResponse.pure[F]
+    else cache.form.thirdPartyData.obligationsResponse.pure[F]
 
   def clearTaxResponses(data: FormDataRecalculated): FormDataRecalculated =
     data.copy(recData = data.recData.copy(data = data.recData.data -- data.recData.hmrcTaxPeriod.keys.toList.map(_._1)))
@@ -111,10 +111,8 @@ class ProcessDataService[F[_]: Monad, E](recalculation: Recalculation[F, E]) {
       responses <- fetchTaxResponsesIfNeeded(data.recData.hmrcTaxPeriod, oldData.recData.hmrcTaxPeriod, cache)
     } yield {
 
-      println("responses: " + (responses))
-
       val dataUpd =
-        if (responses != cache.form.obligationsResponse)
+        if (responses != cache.form.thirdPartyData.obligationsResponse)
           clearTaxResponses(data)
         else data
 

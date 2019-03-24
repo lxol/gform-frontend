@@ -188,8 +188,7 @@ class DeclarationController(
                   updatedForm.formData,
                   Signed,
                   updatedForm.visitsIndex,
-                  updatedForm.thirdPartyData,
-                  cache.form.obligationsResponse
+                  updatedForm.thirdPartyData
                 )
               )
         //todo perhaps not make these calls at all if the feature flag is false?

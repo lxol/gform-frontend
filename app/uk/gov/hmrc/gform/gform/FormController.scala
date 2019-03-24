@@ -299,7 +299,7 @@ class FormController(
           cache.retrievals,
           cache.form.visitsIndex.visit(sectionNumber),
           lang,
-          cache.form.obligationsResponse
+          cache.form.thirdPartyData.obligationsResponse
         )))
   }
 
@@ -417,9 +417,9 @@ class FormController(
             val cacheUpd =
               cache.copy(
                 form = cache.form.copy(
-                  thirdPartyData = after,
-                  formData = formData,
-                  obligationsResponse = processData.obligationsResponse)
+                  thirdPartyData = after.copy(obligationsResponse = processData.obligationsResponse),
+                  formData = formData
+                )
               )
 
             if (needsSecondPhaseRecalculation.getOrElse(false)) {
@@ -449,8 +449,7 @@ class FormController(
             cache.form.formData,
             maybeSn.fold(Summary: FormStatus)(_ => InProgress),
             processData.visitIndex,
-            cache.form.thirdPartyData,
-            cache.form.obligationsResponse
+            cache.form.thirdPartyData
           )
           res <- gformConnector.updateUserData(formId, userData).map(_ => toResult(maybeSn))
         } yield res

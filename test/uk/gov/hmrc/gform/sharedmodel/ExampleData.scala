@@ -470,8 +470,7 @@ trait ExampleForm { dependsOn: ExampleFormField with ExampleFormTemplate =>
     InProgress,
     VisitIndex.empty,
     ThirdPartyData.empty,
-    envelopeExpiryDate,
-    ObligationsResponse(None)
+    envelopeExpiryDate
   )
 
 }

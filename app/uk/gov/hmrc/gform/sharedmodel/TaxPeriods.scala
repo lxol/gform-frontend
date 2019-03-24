@@ -37,14 +37,12 @@ object ObligationDetail {
 case class ObligationDetails(obligationDetails: List[ObligationDetail])
 
 object ObligationDetails {
-  import JsonUtils._
   implicit val format: OFormat[ObligationDetails] = Json.format[ObligationDetails]
 }
 
 case class Obligation(obligations: List[ObligationDetails])
 
 object Obligation {
-  import JsonUtils._
   implicit val format: OFormat[Obligation] = Json.format[Obligation]
 }
 
