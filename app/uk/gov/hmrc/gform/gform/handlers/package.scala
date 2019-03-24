@@ -21,10 +21,11 @@ import uk.gov.hmrc.gform.auth.models.MaterialisedRetrievals
 import uk.gov.hmrc.gform.controllers.AuthCacheWithForm
 import uk.gov.hmrc.gform.fileupload.Envelope
 import uk.gov.hmrc.gform.graph.Data
+import uk.gov.hmrc.gform.sharedmodel.ObligationsResponse
 import uk.gov.hmrc.gform.sharedmodel.config.ContentType
 import uk.gov.hmrc.gform.sharedmodel.form._
 import uk.gov.hmrc.gform.sharedmodel.formtemplate.{ FormComponent, FormTemplate, Section, SectionNumber }
-import uk.gov.hmrc.gform.sharedmodel.{ AccessCode, Obligations }
+import uk.gov.hmrc.gform.sharedmodel.AccessCode
 import uk.gov.hmrc.gform.validation.FormFieldValidationResult
 import uk.gov.hmrc.gform.validation.ValidationUtil.ValidatedType
 
@@ -46,7 +47,7 @@ package object handlers {
     MaterialisedRetrievals,
     VisitIndex,
     Option[String],
-    Obligations) => Html
+    ObligationsResponse) => Html
 
   type UpdateObligations[F[_]] = (FormId, UserData, Form, Form) => F[Unit]
 

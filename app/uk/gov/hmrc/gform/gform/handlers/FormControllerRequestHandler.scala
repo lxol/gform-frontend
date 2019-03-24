@@ -86,10 +86,9 @@ class FormControllerRequestHandler(formValidator: FormValidator)(implicit ec: Ex
     lang: Option[String],
     suppressErrors: SuppressErrors,
     cache: AuthCacheWithForm,
-    updateObligations: UpdateObligations[Future], //TODO remove all the Future
-    recalculateDataAndSections: RecalculateDataAndSections[Future],
+    recalculateDataAndSections: RecalculateDataAndSections[Future], //TODO remove all the Future
     envelopeF: EnvelopeId => Future[Envelope],
-    htmlGenerator: HtmlGenerator,
+    //htmlGenerator: HtmlGenerator,
     formMaxAttachmentSizeMB: Int,
     contentTypes: List[ContentType],
     validateFormComponents: ValidateFormComponents[Future],
@@ -99,17 +98,6 @@ class FormControllerRequestHandler(formValidator: FormValidator)(implicit ec: Ex
     val retrievals = cache.retrievals
 
     for {
-      _ <- updateObligations(
-            cache.oldForm._id,
-            UserData(
-              cache.form.formData,
-              cache.form.status,
-              cache.form.visitsIndex,
-              cache.form.thirdPartyData,
-              cache.form.obligations),
-            cache.oldForm,
-            cache.form
-          )
       (data, sections) <- recalculateDataAndSections(FormDataHelpers.formDataMap(cache.form.formData), cache)
       (errors, validate, envelope) <- handleSuppressErrors(
                                        sectionNumber,

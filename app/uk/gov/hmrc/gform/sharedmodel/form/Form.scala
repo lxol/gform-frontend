@@ -65,7 +65,7 @@ case class Form(
   visitsIndex: VisitIndex,
   thirdPartyData: ThirdPartyData,
   envelopeExpiryDate: Option[EnvelopeExpiryDate],
-  obligations: Obligations
+  obligationsResponse: ObligationsResponse
 )
 
 object Form {
@@ -80,7 +80,7 @@ object Form {
       VisitIndex.format and
       ThirdPartyData.format and
       EnvelopeExpiryDate.optionFormat and
-      Obligations.format
+      ObligationsResponse.format
   )(Form.apply _)
 
   private val writes: OWrites[Form] = OWrites[Form](
@@ -94,7 +94,7 @@ object Form {
         VisitIndex.format.writes(form.visitsIndex) ++
         ThirdPartyData.format.writes(form.thirdPartyData) ++
         EnvelopeExpiryDate.optionFormat.writes(form.envelopeExpiryDate) ++
-        Obligations.format.writes(form.obligations)
+        ObligationsResponse.format.writes(form.obligationsResponse)
   )
 
   implicit val format: OFormat[Form] = OFormat[Form](reads, writes)

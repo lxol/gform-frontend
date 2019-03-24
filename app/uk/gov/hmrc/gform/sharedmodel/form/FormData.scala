@@ -19,14 +19,17 @@ package uk.gov.hmrc.gform.sharedmodel.form
 import cats.Semigroup
 import cats.syntax.eq._
 import play.api.libs.json._
-import uk.gov.hmrc.gform.graph.Data
+import uk.gov.hmrc.gform.graph.{ Data, RecData }
 import uk.gov.hmrc.gform.sharedmodel.formtemplate.{ FormComponentId, Section }
 import uk.gov.hmrc.gform.sharedmodel.graph.{ GraphNode, IncludeIfGN, SimpleGN }
 
 case class FormData(fields: Seq[FormField]) extends AnyVal {
   def toData: Data = fields.map(x => x.id -> List(x.value)).toMap
 }
-case class FormDataRecalculated(invisible: Set[GraphNode], data: Data) {
+case class FormDataRecalculated(invisible: Set[GraphNode], recData: RecData) {
+
+  val data = recData.data
+
   def isVisible(section: Section): Boolean =
     !invisible.exists {
       case SimpleGN(fcId)               => false
@@ -44,5 +47,5 @@ object FormData {
 }
 
 object FormDataRecalculated {
-  val empty = FormDataRecalculated(Set.empty, Map.empty)
+  val empty = FormDataRecalculated(Set.empty, RecData.empty)
 }

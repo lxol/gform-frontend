@@ -36,7 +36,7 @@ import uk.gov.hmrc.gform.commons.{ BigDecimalUtil, NumberFormatUtil }
 import uk.gov.hmrc.gform.gform.AuthContextPrepop
 import uk.gov.hmrc.gform.graph.processor.UserCtxEvaluatorProcessor
 import uk.gov.hmrc.gform.models.ExpandUtils
-import uk.gov.hmrc.gform.sharedmodel.AffinityGroupUtil
+import uk.gov.hmrc.gform.sharedmodel.{ AffinityGroupUtil, IdNumberValue }
 import uk.gov.hmrc.gform.sharedmodel.form.{ EnvelopeId, FormDataRecalculated, ThirdPartyData, ValidationResult }
 import uk.gov.hmrc.gform.sharedmodel.formtemplate._
 import uk.gov.hmrc.gform.sharedmodel.graph.{ DependencyGraph, GraphNode, IncludeIfGN, SimpleGN }
@@ -74,7 +74,7 @@ class Recalculation[F[_]: Monad, E](
   val error: GraphException => E
 ) {
 
-  type Context = (Set[GraphNode], Data)
+  type Context = (Set[GraphNode], RecData)
   type ContextWithNodesToRecalculate = (Set[GraphNode], List[FormComponentId])
 
   def recalculateFormData(
@@ -111,7 +111,7 @@ class Recalculation[F[_]: Monad, E](
       */
     def markInvisible(
       acc: ContextWithNodesToRecalculate,
-      dataLookup: Data,
+      dataLookup: RecData,
       gn: GraphNode): F[ContextWithNodesToRecalculate] = {
       val (visibilitySet, nodesToRecalculate) = acc
       gn match {
@@ -123,7 +123,14 @@ class Recalculation[F[_]: Monad, E](
         case n @ IncludeIfGN(_, includeIf) =>
           val isSectionVisible: F[Boolean] =
             booleanExprEval
-              .isTrue(includeIf.expr, dataLookup, retrievals, visibilitySet, thirdPartyData, envelopeId, formTemplate)
+              .isTrue(
+                includeIf.expr,
+                dataLookup.data,
+                retrievals,
+                visibilitySet,
+                thirdPartyData,
+                envelopeId,
+                formTemplate)
           for {
             sectionVisible <- isSectionVisible
           } yield {
@@ -156,9 +163,9 @@ class Recalculation[F[_]: Monad, E](
 
       def recalculateLayerNodes(
         visSet: Set[GraphNode],
-        nodes: List[FormComponentId]): EitherT[F, GraphException, Data] = {
+        nodes: List[FormComponentId]): EitherT[F, GraphException, RecData] = {
 
-        val genesis: EitherT[F, GraphException, Data] = EitherT(dataLookup.pure[F].map(Right.apply))
+        val genesis: EitherT[F, GraphException, RecData] = EitherT(dataLookup.pure[F].map(Right.apply))
 
         nodes.foldLeft(genesis) {
           case (dataLookupF, node) =>
@@ -186,7 +193,7 @@ class Recalculation[F[_]: Monad, E](
     }
 
     val contextE: Either[GraphException, Context] =
-      Right((Set.empty, data))
+      Right((Set.empty, RecData.fromData(data)))
 
     val genesisContext: EitherT[F, GraphException, Context] =
       EitherT(contextE.pure[F])
@@ -206,29 +213,45 @@ class Recalculation[F[_]: Monad, E](
     }
   }
 
-  private def hasData(fc: FormComponent, dataLookup: Data): Boolean =
-    dataLookup.get(fc.id).fold(false)(_.filter(_.isEmpty).isEmpty)
+  private def hasData(fc: FormComponent, recData: RecData): Boolean =
+    recData.data.get(fc.id).fold(false)(_.filter(_.isEmpty).isEmpty)
+
+  private def isHmrcTaxPeriod(fc: FormComponent): Boolean =
+    fc match {
+      case IsHmrcTaxPeriod(_) => true
+      case _                  => false
+    }
 
   private def calculate(
     visSet: Set[GraphNode],
     fcId: FormComponentId,
     fcLookup: Map[FormComponentId, FormComponent],
-    dataLookup: Data,
+    recData: RecData,
     retrievals: MaterialisedRetrievals,
     formTemplate: FormTemplate,
     thirdPartyData: ThirdPartyData,
-    envelopeId: EnvelopeId)(implicit hc: HeaderCarrier): F[Either[GraphException, Data]] =
+    envelopeId: EnvelopeId)(implicit hc: HeaderCarrier): F[Either[GraphException, RecData]] =
     Either.fromOption(fcLookup.get(fcId), NoFormComponent(fcId, fcLookup)).traverse { fc =>
-      if ((fc.editable || fc.derived) && hasData(fc, dataLookup)) dataLookup.pure[F]
+      if ((fc.editable || fc.derived) && (hasData(fc, recData) && !isHmrcTaxPeriod(fc))) recData.pure[F]
       else
         fc match {
-          case IsText(_) | IsTextArea(_) =>
+          case fc @ IsHmrcTaxPeriod(hmrcTaxPeriod) =>
+            val dataLookup = recData.data
             recalculate(fc, visSet, dataLookup, retrievals, formTemplate, thirdPartyData, envelopeId).map {
-              case SetEmpty        => dataLookup + (fcId -> Seq(""))
-              case NoChange        => dataLookup
-              case NewValue(value) => dataLookup + (fcId -> Seq(value))
+              case SetEmpty =>
+                recData.copy(hmrcTaxPeriod = recData.hmrcTaxPeriod + ((fc.id, hmrcTaxPeriod) -> IdNumberValue("")))
+              case NoChange => recData
+              case NewValue(value) =>
+                recData.copy(hmrcTaxPeriod = recData.hmrcTaxPeriod + ((fc.id, hmrcTaxPeriod) -> IdNumberValue(value)))
             }
-          case _ => dataLookup.pure[F] // Nothing to recompute on non-text components
+          case IsText(_) | IsTextArea(_) =>
+            val dataLookup = recData.data
+            recalculate(fc, visSet, dataLookup, retrievals, formTemplate, thirdPartyData, envelopeId).map {
+              case SetEmpty        => recData.copy(data = dataLookup + (fcId -> Seq("")))
+              case NoChange        => recData
+              case NewValue(value) => recData.copy(data = dataLookup + (fcId -> Seq(value)))
+            }
+          case _ => recData.pure[F] // Nothing to recompute on non-text components
         }
     }
 

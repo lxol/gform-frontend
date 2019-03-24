@@ -16,8 +16,21 @@
 
 package uk.gov.hmrc.gform
 
-import uk.gov.hmrc.gform.sharedmodel.formtemplate.FormComponentId
+import uk.gov.hmrc.gform.sharedmodel.formtemplate.{ FormComponentId, HmrcTaxPeriod }
+import uk.gov.hmrc.gform.sharedmodel.IdNumberValue
 
 package object graph {
   type Data = Map[FormComponentId, Seq[String]]
+}
+
+package graph {
+  case class RecData(
+    data: Data,
+    hmrcTaxPeriod: Map[(FormComponentId, HmrcTaxPeriod), IdNumberValue]
+  )
+
+  object RecData {
+    val empty = fromData(Map.empty)
+    def fromData(data: Data) = RecData(data, Map.empty[(FormComponentId, HmrcTaxPeriod), IdNumberValue])
+  }
 }

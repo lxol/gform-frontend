@@ -109,7 +109,7 @@ class SectionRenderingService(frontendAppConfig: FrontendAppConfig)(
     retrievals: MaterialisedRetrievals,
     visitsIndex: VisitIndex,
     lang: Option[String],
-    obligations: Obligations
+    obligations: ObligationsResponse
   )(implicit request: Request[_], messages: Messages): Html = {
 
     val section = dynamicSections(sectionNumber.value)
@@ -288,8 +288,17 @@ class SectionRenderingService(frontendAppConfig: FrontendAppConfig)(
 
     val listResult = errors.map { case (_, validationResult) => validationResult }
 
-    val snippets = formTemplate.declarationSection.fields.map(fieldValue =>
-      htmlFor(fieldValue, formTemplate._id, 0, ei, fieldData, validatedType, lang, obligations = NotChecked))
+    val snippets = formTemplate.declarationSection.fields.map(
+      fieldValue =>
+        htmlFor(
+          fieldValue,
+          formTemplate._id,
+          0,
+          ei,
+          fieldData,
+          validatedType,
+          lang,
+          obligations = ObligationsResponse(None)))
     val pageLevelErrorHtml = generatePageLevelErrorHtml(listResult, List.empty)
     val renderingInfo = SectionRenderingInformation(
       formTemplate._id,
@@ -357,7 +366,7 @@ class SectionRenderingService(frontendAppConfig: FrontendAppConfig)(
                          FormDataRecalculated.empty,
                          ValidationResult.empty.valid,
                          lang,
-                         obligations = NotChecked)))
+                         obligations = ObligationsResponse(None))))
       renderingInfo = SectionRenderingInformation(
         formTemplate._id,
         maybeAccessCode,
@@ -406,8 +415,17 @@ class SectionRenderingService(frontendAppConfig: FrontendAppConfig)(
       formLevelHeading = true)
     val listResult = errors.map { case (_, validationResult) => validationResult }
     val snippets =
-      enrolmentSection.fields.map(fieldValue =>
-        htmlFor(fieldValue, formTemplate._id, 0, ei, fieldData, validatedType, lang, obligations = NotChecked))
+      enrolmentSection.fields.map(
+        fieldValue =>
+          htmlFor(
+            fieldValue,
+            formTemplate._id,
+            0,
+            ei,
+            fieldData,
+            validatedType,
+            lang,
+            obligations = ObligationsResponse(None)))
     val pageLevelErrorHtml = generatePageLevelErrorHtml(listResult, globalErrors)
     val renderingInfo = SectionRenderingInformation(
       formTemplate._id,
@@ -454,7 +472,7 @@ class SectionRenderingService(frontendAppConfig: FrontendAppConfig)(
     maybeValidated: ValidatedType[ValidationResult],
     lang: Option[String],
     isHidden: Boolean = false,
-    obligations: Obligations)(implicit request: Request[_], messages: Messages): Html =
+    obligations: ObligationsResponse)(implicit request: Request[_], messages: Messages): Html =
     fieldValue.`type` match {
       case sortCode @ UkSortCode(expr) =>
         htmlForSortCode(fieldValue, sortCode, expr, fieldValue.id, index, maybeValidated, ei, data, isHidden)
@@ -498,17 +516,22 @@ class SectionRenderingService(frontendAppConfig: FrontendAppConfig)(
     ei: ExtraInfo,
     validatedType: ValidatedType[ValidationResult],
     data: FormDataRecalculated,
-    obligations: Obligations,
+    obligations: ObligationsResponse,
     hmrcTP: HmrcTaxPeriod) = {
-
-    val taxPeriodList = obligations match {
-      case RetrievedObligations(listOfObligations) => listOfObligations
-      case _                                       => List[TaxPeriodInformation]()
+    println("[htmlForHmrcTaxPeriod] obligations: " + (obligations))
+    val taxPeriodOptions: List[OptionParams] = obligations.obligationsResponse match {
+      case Some(nel) =>
+        nel.find(_.id.hmrcTaxPeriod == hmrcTP) match {
+          case None => List.empty[OptionParams]
+          case Some(taxResponse) =>
+            val obligationDetails: List[ObligationDetail] =
+              taxResponse.obligation.obligations.flatMap(_.obligationDetails)
+            obligationDetails.map(od =>
+              OptionParams(od.periodKey, od.inboundCorrespondenceFromDate, od.inboundCorrespondenceToDate, false))
+        }
+      case None => List.empty[OptionParams]
     }
 
-    val taxPeriodOptions = taxPeriodList
-      .filter(i => i.hmrcTaxPeriod.idNumber === hmrcTP.idNumber)
-      .map(i => OptionParams(i.periodKey, i.inboundCorrespondenceFromDate, i.inboundCorrespondenceToDate, false))
     val validatedValue = buildFormFieldValidationResult(fieldValue, ei, validatedType, data)
     val mapOfResultsOption = validatedValue match {
       case Some(ComponentField(a, b)) => b
@@ -765,7 +788,7 @@ class SectionRenderingService(frontendAppConfig: FrontendAppConfig)(
     data: FormDataRecalculated,
     validatedType: ValidatedType[ValidationResult],
     lang: Option[String],
-    obligations: Obligations)(implicit request: Request[_], messages: Messages): Html = {
+    obligations: ObligationsResponse)(implicit request: Request[_], messages: Messages): Html = {
     val grpHtml = htmlForGroup0(grp, formTemplateId, fieldValue, index, ei, data, validatedType, lang, obligations)
 
     val isChecked = FormDataHelpers
@@ -787,7 +810,7 @@ class SectionRenderingService(frontendAppConfig: FrontendAppConfig)(
     data: FormDataRecalculated,
     validatedType: ValidatedType[ValidationResult],
     lang: Option[String],
-    obligations: Obligations)(implicit request: Request[_], messages: Messages) = {
+    obligations: ObligationsResponse)(implicit request: Request[_], messages: Messages) = {
     val maybeHint = fieldValue.helpText.map(markDownParser).map(Html.apply)
 
     val (lhtml, limitReached) =
@@ -831,7 +854,7 @@ class SectionRenderingService(frontendAppConfig: FrontendAppConfig)(
     ei: ExtraInfo,
     data: FormDataRecalculated,
     lang: Option[String],
-    obligations: Obligations)(implicit request: Request[_], messsages: Messages): (List[Html], Boolean) =
+    obligations: ObligationsResponse)(implicit request: Request[_], messsages: Messages): (List[Html], Boolean) =
     if (groupField.repeatsMax.isDefined) {
       val (groupList, isLimit) = getRepeatingGroupsForRendering(fieldValue, groupField, ei.fieldData)
       val gl: List[GroupList] = groupList

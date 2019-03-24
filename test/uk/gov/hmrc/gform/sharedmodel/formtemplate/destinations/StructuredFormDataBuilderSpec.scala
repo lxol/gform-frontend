@@ -20,7 +20,7 @@ import cats.data.NonEmptyList
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.scalatest.Assertion
 import uk.gov.hmrc.gform.Spec
-import uk.gov.hmrc.gform.sharedmodel.NotChecked
+import uk.gov.hmrc.gform.sharedmodel.ObligationsResponse
 import uk.gov.hmrc.gform.sharedmodel.form._
 import uk.gov.hmrc.gform.sharedmodel.formtemplate._
 
@@ -261,7 +261,7 @@ class StructuredFormDataBuilderSpec extends Spec {
       VisitIndex(Set(1)),
       ThirdPartyData.empty,
       None,
-      NotChecked
+      ObligationsResponse(None)
     )
 
   def createFormTemplate(

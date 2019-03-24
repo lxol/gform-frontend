@@ -176,6 +176,8 @@ object Fields {
       case (id, acc) => acc.updated(id, "" :: Nil)
     }
 
-    (submitted ++ alwaysEmptyHiddenGroup ++ alwaysEmptyHidden ++ hiddenFUs, data.copy(data = dataUpd))
+    (
+      submitted ++ alwaysEmptyHiddenGroup ++ alwaysEmptyHidden ++ hiddenFUs,
+      data.copy(recData = data.recData.copy(data = dataUpd)))
   }
 }

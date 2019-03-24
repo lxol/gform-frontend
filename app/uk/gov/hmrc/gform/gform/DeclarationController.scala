@@ -29,7 +29,8 @@ import uk.gov.hmrc.gform.auth.models.MaterialisedRetrievals
 import uk.gov.hmrc.gform.config.FrontendAppConfig
 import uk.gov.hmrc.gform.controllers.{ AuthCacheWithForm, AuthenticatedRequestActions }
 import uk.gov.hmrc.gform.controllers.helpers.FormDataHelpers.{ formDataMap, get, processResponseDataFromBody }
-import uk.gov.hmrc.gform.graph.{ EmailParameterRecalculation, Recalculation }
+import uk.gov.hmrc.gform.graph.{ EmailParameterRecalculation, RecData, Recalculation }
+import uk.gov.hmrc.gform.models.helpers.Fields
 import uk.gov.hmrc.gform.sharedmodel.AccessCode
 import uk.gov.hmrc.gform.fileupload.Envelope
 import uk.gov.hmrc.gform.gformbackend.GformConnector
@@ -119,7 +120,7 @@ class DeclarationController(
         val formData: Map[FormComponentId, List[String]] = cacheOrig.form.formData.fields.map {
           case FormField(id, value) => id -> (value :: Nil)
         }.toMap
-        val declarationData = FormDataRecalculated(Set.empty, dataRaw)
+        val declarationData = FormDataRecalculated(Set.empty, RecData.fromData(dataRaw))
 
         get(dataRaw, FormComponentId("save")) match {
           case "Continue" :: Nil =>
@@ -188,7 +189,7 @@ class DeclarationController(
                   Signed,
                   updatedForm.visitsIndex,
                   updatedForm.thirdPartyData,
-                  cache.form.obligations
+                  cache.form.obligationsResponse
                 )
               )
         //todo perhaps not make these calls at all if the feature flag is false?

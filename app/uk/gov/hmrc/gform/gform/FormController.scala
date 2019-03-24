@@ -16,6 +16,7 @@
 
 package uk.gov.hmrc.gform.gform
 
+import cats.data.NonEmptyList
 import cats.instances.future._
 import cats.instances.option._
 import cats.syntax.applicative._
@@ -24,6 +25,7 @@ import cats.syntax.eq._
 import play.api.data
 import play.api.i18n.I18nSupport
 import play.api.mvc._
+import scala.concurrent.ExecutionContext
 import uk.gov.hmrc.gform.auth.models.{ IsAgent, MaterialisedRetrievals }
 import uk.gov.hmrc.gform.config.{ AppConfig, FrontendAppConfig }
 import uk.gov.hmrc.gform.controllers._
@@ -36,7 +38,6 @@ import uk.gov.hmrc.gform.graph.Data
 import uk.gov.hmrc.gform.models.ExpandUtils._
 import uk.gov.hmrc.gform.models.gform.FormValidationOutcome
 import uk.gov.hmrc.gform.models.{ AgentAccessCode, ProcessData, ProcessDataService }
-import uk.gov.hmrc.gform.obligation.ObligationService
 import uk.gov.hmrc.gform.sharedmodel._
 import uk.gov.hmrc.gform.sharedmodel.form._
 import uk.gov.hmrc.gform.sharedmodel.formtemplate.SectionTitle4Ga._
@@ -61,10 +62,15 @@ class FormController(
   renderer: SectionRenderingService,
   gformConnector: GformConnector,
   processDataService: ProcessDataService[Future, Throwable],
-  obligationService: ObligationService,
   formService: FormService,
   handler: FormControllerRequestHandler
 ) extends FrontendController {
+
+  implicit def s(implicit hc: HeaderCarrier) =
+    new uk.gov.hmrc.gform.models.TaxPeriodConnect[Future] {
+      def getTaxPeriod(request: NonEmptyList[HmrcTaxPeriodWithEvaluatedId]): Future[NonEmptyList[TaxResponse]] =
+        gformConnector.getAllTaxPeriods(request)
+    }
 
   import i18nSupport._
 
@@ -269,10 +275,8 @@ class FormController(
         lang,
         suppressErrors,
         cache,
-        obligationService.updateObligations[Future],
         processDataService.recalculateDataAndSections,
         fileUploadService.getEnvelope,
-        renderer.renderSection,
         formMaxAttachmentSizeMB,
         contentTypes,
         validationService.validateFormComponents,
@@ -295,7 +299,7 @@ class FormController(
           cache.retrievals,
           cache.form.visitsIndex.visit(sectionNumber),
           lang,
-          cache.obligations
+          cache.form.obligationsResponse
         )))
   }
 
@@ -410,7 +414,13 @@ class FormController(
             val needsSecondPhaseRecalculation =
               (before.desRegistrationResponse, after.desRegistrationResponse).mapN(_ =!= _)
 
-            val cacheUpd = cache.copy(form = cache.form.copy(thirdPartyData = after, formData = formData))
+            val cacheUpd =
+              cache.copy(
+                form = cache.form.copy(
+                  thirdPartyData = after,
+                  formData = formData,
+                  obligationsResponse = processData.obligationsResponse)
+              )
 
             if (needsSecondPhaseRecalculation.getOrElse(false)) {
               val newDataRaw = formData.copy(fields = cache.form.visitsIndex.toFormField +: formData.fields).toData
@@ -440,7 +450,7 @@ class FormController(
             maybeSn.fold(Summary: FormStatus)(_ => InProgress),
             processData.visitIndex,
             cache.form.thirdPartyData,
-            cache.form.obligations
+            cache.form.obligationsResponse
           )
           res <- gformConnector.updateUserData(formId, userData).map(_ => toResult(maybeSn))
         } yield res

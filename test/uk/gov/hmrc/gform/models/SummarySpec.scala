@@ -25,6 +25,7 @@ import play.api.mvc.Call
 import uk.gov.hmrc.gform.Spec
 import uk.gov.hmrc.gform.auth.models.MaterialisedRetrievals
 import uk.gov.hmrc.gform.gform.routes
+import uk.gov.hmrc.gform.graph.RecData
 import uk.gov.hmrc.gform.models.helpers.Extractors._
 import uk.gov.hmrc.gform.sharedmodel.ExampleData
 import uk.gov.hmrc.gform.sharedmodel.form.{ FormDataRecalculated, ValidationResult }
@@ -244,7 +245,7 @@ class SummarySpec extends Spec {
     override def formTemplate = super.formTemplate.copy(sections = List(section))
 
     override val formDataRecalculated = FormDataRecalculated.empty.copy(
-      data = Map(
+      recData = RecData.fromData(Map(
         FormComponentId("Surname")              -> Seq("Test!Saxe-Coburg-Gotha!Test"),
         FormComponentId("Info")                 -> Seq("Test!Royal!Test"),
         FormComponentId("BirthDate-day")        -> Seq("19"),
@@ -256,7 +257,7 @@ class SummarySpec extends Spec {
         FormComponentId("HomeAddress-street4")  -> Seq("Test!Town!Test"),
         FormComponentId("HomeAddress-postcode") -> Seq("Test!PO32 6JX!Test"),
         FormComponentId("HomeAddress-country")  -> Seq("Test!UK!Test")
-      ))
+      )))
 
     override def fieldValues = formTemplate.sections.flatMap(_.fields)
     val render = SummaryRenderingService
@@ -497,7 +498,7 @@ class SummarySpec extends Spec {
     )
     val renderWithDataMatching = SummaryRenderingService.summaryForRender(
       f,
-      FormDataRecalculated.empty.copy(data = Map(FormComponentId("firstName") -> Seq("Pete"))),
+      FormDataRecalculated.empty.copy(recData = RecData.fromData(Map(FormComponentId("firstName") -> Seq("Pete")))),
       Some(accessCode),
       formTemplate,
       envelope,
@@ -508,7 +509,7 @@ class SummarySpec extends Spec {
       f,
       FormDataRecalculated(
         Set(IncludeIfGN(FormComponentId("includeId_X"), includeIf)),
-        Map(FormComponentId("firstName") -> Seq("*Not*Pete"))),
+        RecData.fromData(Map(FormComponentId("firstName") -> Seq("*Not*Pete")))),
       Some(accessCode),
       formTemplate,
       envelope,
@@ -582,7 +583,8 @@ class SummarySpec extends Spec {
       f,
       FormDataRecalculated(
         Set(IncludeIfGN(FormComponentId("includeId_X"), includeIf)),
-        Map(FormComponentId("firstName") -> Seq("*Not*Pete"))),
+        RecData.fromData(Map(FormComponentId("firstName") -> Seq("*Not*Pete")))
+      ),
       Some(accessCode),
       formTemplate,
       envelope,

@@ -49,6 +49,22 @@ class DependencyGraphSpec extends FlatSpec with Matchers {
     )
   }
 
+  it should "handle HmrcTaxPeriod component" in {
+    val hmrcTaxPeriod = HmrcTaxPeriod(IdType("safeId"), TextExpression(FormCtx("a")), RegimeType("ITSA"))
+    val sections = List(
+      mkSection(
+        List(
+          mkFormComponent("a", Value),
+          mkFormComponent("b", hmrcTaxPeriod)
+        )
+      )
+    )
+    layers(sections) shouldBe List(
+      (0, List("b")),
+      (1, List("a"))
+    )
+  }
+
   it should "handle long chain of dependencies" in {
 
     val sections = List(

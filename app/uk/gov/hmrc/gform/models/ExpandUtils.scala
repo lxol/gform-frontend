@@ -138,7 +138,7 @@ object ExpandUtils {
   }
 
   private def occurrenceCount(ids: List[FormComponentId])(formData: FormDataRecalculated): Int = {
-    val res = formData.data.keys
+    val res = formData.recData.data.keys
       .filter { fcId =>
         ids.exists(_ == stripAnyPrefix(fcId))
       }
@@ -175,7 +175,7 @@ object ExpandUtils {
             case fc                      => fc.id
           } map (fcId => index + "_" + fcId.value)
 
-        (data.copy(data = newData), anchor)
+        (data.copy(recData = data.recData.copy(data = newData)), anchor)
       case None => (data, None)
     }
 
@@ -212,7 +212,7 @@ object ExpandUtils {
             .toMap
         val newData = (updatedData -- allGroupFcIds) ++ updatedMap
 
-        data.copy(data = newData)
+        data.copy(recData = data.recData.copy(data = newData))
 
     }
 
