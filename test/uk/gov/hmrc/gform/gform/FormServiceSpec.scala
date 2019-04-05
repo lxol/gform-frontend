@@ -26,7 +26,6 @@ import uk.gov.hmrc.gform.ops.FormComponentOps
 
 class FormServiceSpec extends Spec {
 
-  val formService = new FormService
 
   val genFormComponent = FormComponentGen.formComponentGen()
 
@@ -48,7 +47,7 @@ class FormServiceSpec extends Spec {
   "removeCommas" should "remove any commas from the FormFieldValidationResult when FormComponent type is of type Sterling" +
     "of Sterling" in {
     forAll(genFormComponentSterlingConstraint) { formComponent =>
-      formService
+      FormService
         .removeCommas(List(FormComponentValidation(formComponent, FieldOk(formComponent, "1000.25"))))
         .head
         .formFieldValidationResult
@@ -58,7 +57,7 @@ class FormServiceSpec extends Spec {
 
   it should "not remove any commas from the FormFieldValidationResult when FormFieldValidationResult is not equal to FieldOk" in {
     forAll(genFormComponentSterlingConstraint) { formComponent =>
-      formService
+      FormService
         .removeCommas(
           List(FormComponentValidation(formComponent, FieldError(formComponent, "1,000.25", Set("someErrors")))))
         .head
@@ -69,7 +68,7 @@ class FormServiceSpec extends Spec {
 
   it should "remove any commas from the FormFieldValidationResult when FormComponent type is Number" in {
     forAll(genFormComponentPNConstraint) { formComponent =>
-      formService
+      FormService
         .removeCommas(List(FormComponentValidation(formComponent, FieldOk(formComponent, "1,000,000"))))
         .head
         .formFieldValidationResult
@@ -79,7 +78,7 @@ class FormServiceSpec extends Spec {
 
   it should "remove any commas from the FormFieldValidationResult when FormComponent type is PositiveNumber" in {
     forAll(genFormComponentNumberConstraint) { formComponent =>
-      formService
+      FormService
         .removeCommas(List(FormComponentValidation(formComponent, FieldOk(formComponent, "1,000,000"))))
         .head
         .formFieldValidationResult
@@ -89,11 +88,17 @@ class FormServiceSpec extends Spec {
 
   it should "leave commas untouched, when FormComponent type does not equal Sterling, Number or Positive Number" in {
     forAll(genFormComponent.filterNot(x => x.isSterling || x.isNumber || x.isPositiveNumber)) { formComponent =>
-      formService
+      FormService
         .removeCommas(List(FormComponentValidation(formComponent, FieldOk(formComponent, "1,000.25"))))
         .head
         .formFieldValidationResult
         .getCurrentValue shouldBe Some("1,000.25")
     }
   }
+  "toUpperCase" should "Not amend data to uppercase if the attribute is set to false" in {
+    val textType = Text(BasicText,_,_)
+    forAll(genFormComponent.filter(x=> x.`type`== textType)) { formComponent =>
+      FormService.toUpperCase(List(FormComponentValidation(formComponent, FieldOk(formComponent, "abcd") ))) shouldBe()
+    }
+    }
 }

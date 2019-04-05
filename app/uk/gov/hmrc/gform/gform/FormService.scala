@@ -22,7 +22,7 @@ import uk.gov.hmrc.gform.sharedmodel.form.{ FormData, ValidationResult }
 import uk.gov.hmrc.gform.sharedmodel.formtemplate.FormComponent
 import uk.gov.hmrc.gform.validation.ValidationUtil.ValidatedType
 
-class FormService {
+case object FormService {
 
   def removeCommas(formValidatedData: List[FormComponentValidation]): List[FormComponentValidation] =
     formValidatedData.map(removeCommasHelper)
@@ -41,6 +41,8 @@ class FormService {
       case (formComponent, formFieldValidationResult) =>
         FormComponentValidation(formComponent, formFieldValidationResult)
     }
+
+  def toUpperCase(formValidatedData: List[FormComponentValidation]): List[FormComponentValidation] = ???
 
   def extractedValidateFormHelper(
     validationResult: List[FormComponentValidation],

@@ -117,7 +117,7 @@ object FormComponent {
 object IsText {
   def unapply(fc: FormComponent): Option[Text] =
     fc.`type` match {
-      case t @ Text(_, _, _) => Some(t)
+      case t @ Text(_, _, _,_) => Some(t)
       case _                 => None
     }
 }

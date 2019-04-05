@@ -33,7 +33,8 @@ sealed trait ComponentType
 case class Text(
   constraint: TextConstraint,
   value: Expr,
-  displayWidth: DisplayWidth = DisplayWidth.DEFAULT
+  displayWidth: DisplayWidth = DisplayWidth.DEFAULT,
+  toUpperCase: Boolean = false
 ) extends ComponentType
 
 case class TextArea(
