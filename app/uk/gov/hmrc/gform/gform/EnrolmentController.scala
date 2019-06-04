@@ -39,7 +39,7 @@ import uk.gov.hmrc.gform.gform.processor.EnrolmentResultProcessor
 import uk.gov.hmrc.gform.graph.{ Convertible, Evaluator, NewValue, Recalculation }
 import uk.gov.hmrc.gform.models.helpers.Fields
 import uk.gov.hmrc.gform.sharedmodel.{ ServiceCallResponse, ServiceResponse }
-import uk.gov.hmrc.gform.sharedmodel.form.{ EnvelopeId, FormDataRecalculated, ThirdPartyData, ValidationResult }
+import uk.gov.hmrc.gform.sharedmodel.form.{ EnvelopeId, FormDataRecalculated, Seed, ThirdPartyData, ValidationResult }
 import uk.gov.hmrc.gform.sharedmodel.formtemplate._
 import uk.gov.hmrc.gform.sharedmodel.taxenrolments.TaxEnrolmentsResponse
 import uk.gov.hmrc.gform.validation.ValidationService
@@ -145,7 +145,7 @@ class EnrolmentController(
                            formTemplate,
                            retrievals,
                            ThirdPartyData.empty,
-                           EnvelopeId(""),
+                           Seed(""),
                            enrolmentSection.fields
                              .map(fc => fc.id -> fc)
                              .toMap
@@ -154,6 +154,7 @@ class EnrolmentController(
                                      .validateComponents(
                                        allFields,
                                        data,
+                                       Seed(""),
                                        EnvelopeId(""),
                                        retrievals,
                                        ThirdPartyData.empty,
@@ -283,7 +284,7 @@ class EnrolmentController(
                     env.retrievals,
                     env.formTemplate,
                     ThirdPartyData.empty,
-                    EnvelopeId(""))
+                    Seed(""))
                 Convertible
                   .asString(convertible, env.formTemplate)
                   .map {

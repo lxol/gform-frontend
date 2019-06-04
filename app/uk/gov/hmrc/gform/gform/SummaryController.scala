@@ -121,7 +121,7 @@ class SummaryController(
             cache.formTemplate,
             cache.retrievals,
             cache.form.thirdPartyData,
-            cache.form.envelopeId)
+            cache.form.seed)
           .map { data =>
             maybeAccessCode match {
               case (Some(accessCode)) =>
@@ -184,7 +184,7 @@ class SummaryController(
                cache.formTemplate,
                retrievals,
                cache.form.thirdPartyData,
-               cache.form.envelopeId
+               cache.form.seed
              )
       allSections = RepeatingComponentService.getAllSections(cache.formTemplate, data)
       sections = filterSection(allSections, data)
@@ -201,6 +201,7 @@ class SummaryController(
                    .validateFormComponents(
                      allFields,
                      section,
+                     cache.form.seed,
                      cache.form.envelopeId,
                      retrievals,
                      cache.form.thirdPartyData,
@@ -228,7 +229,7 @@ class SummaryController(
                  cache.formTemplate,
                  cache.retrievals,
                  cache.form.thirdPartyData,
-                 cache.form.envelopeId)
+                 cache.form.seed)
       envelope <- envelopeF
       (v, _)   <- validateForm(cache, envelope, cache.retrievals)
     } yield

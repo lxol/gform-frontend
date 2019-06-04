@@ -19,11 +19,12 @@ package uk.gov.hmrc.gform.validation
 import cats.data.Validated
 import cats.implicits._
 import play.api.i18n.Messages
+
 import scala.concurrent.{ ExecutionContext, Future }
 import uk.gov.hmrc.gform.auth.models.MaterialisedRetrievals
 import uk.gov.hmrc.gform.fileupload.{ Error, File, FileUploadService, Infected }
 import uk.gov.hmrc.gform.lookup.LookupRegistry
-import uk.gov.hmrc.gform.sharedmodel.form.{ EnvelopeId, FileId, FormDataRecalculated, ThirdPartyData, Validated => _ }
+import uk.gov.hmrc.gform.sharedmodel.form.{ EnvelopeId, FileId, FormDataRecalculated, Seed, ThirdPartyData, Validated => _ }
 import uk.gov.hmrc.gform.sharedmodel.formtemplate._
 import uk.gov.hmrc.gform.validation.ValidationServiceHelper._
 import uk.gov.hmrc.gform.validation.ValidationUtil.ValidatedType
@@ -32,6 +33,7 @@ import uk.gov.hmrc.http.HeaderCarrier
 class ComponentsValidator(
   data: FormDataRecalculated,
   fileUploadService: FileUploadService,
+  seed: Seed,
   envelopeId: EnvelopeId,
   retrievals: MaterialisedRetrievals,
   booleanExpr: BooleanExprEval[Future],
@@ -53,7 +55,7 @@ class ComponentsValidator(
       (validationResult.isValid, fieldValue.validIf) match {
         case (true, Some(vi)) =>
           booleanExpr
-            .isTrue(vi.expr, data.data, retrievals, data.invisible, thirdPartyData, envelopeId, formTemplate)
+            .isTrue(vi.expr, data.data, retrievals, data.invisible, thirdPartyData, seed, formTemplate)
             .map {
               case false => validationFailure(fieldValue, messages("generic.error.required"))
               case true  => validationResult

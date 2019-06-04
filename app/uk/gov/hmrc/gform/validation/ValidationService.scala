@@ -46,6 +46,7 @@ class ValidationService(
     fieldValue: FormComponent,
     fieldValues: List[FormComponent],
     data: FormDataRecalculated,
+    seed: Seed,
     envelopeId: EnvelopeId,
     retrievals: MaterialisedRetrievals,
     thirdPartyData: ThirdPartyData,
@@ -53,6 +54,7 @@ class ValidationService(
     new ComponentsValidator(
       data,
       fileUploadService,
+      seed,
       envelopeId,
       retrievals,
       booleanExpr,
@@ -64,12 +66,14 @@ class ValidationService(
   def validateComponents(
     fieldValues: List[FormComponent],
     data: FormDataRecalculated,
+    seed: Seed,
     envelopeId: EnvelopeId,
     retrievals: MaterialisedRetrievals,
     thirdPartyData: ThirdPartyData,
     formTemplate: FormTemplate)(implicit hc: HeaderCarrier, messages: Messages): Future[ValidatedType[Unit]] =
     fieldValues
-      .traverse(fv => validateFieldValue(fv, fieldValues, data, envelopeId, retrievals, thirdPartyData, formTemplate))
+      .traverse(fv =>
+        validateFieldValue(fv, fieldValues, data, seed, envelopeId, retrievals, thirdPartyData, formTemplate))
       .map(Monoid[ValidatedType[Unit]].combineAll)
 
   private def validateUsingValidators(section: Section, data: FormDataRecalculated)(
@@ -84,6 +88,7 @@ class ValidationService(
   def validateFormComponents(
     sectionFields: List[FormComponent],
     section: Section,
+    seed: Seed,
     envelopeId: EnvelopeId,
     retrievals: MaterialisedRetrievals,
     thirdPartyData: ThirdPartyData,
@@ -93,7 +98,7 @@ class ValidationService(
     messages: Messages): Future[ValidatedType[ValidationResult]] = {
     val eT = for {
       _ <- EitherT(
-            validateComponents(sectionFields, data, envelopeId, retrievals, thirdPartyData, formTemplate).map(
+            validateComponents(sectionFields, data, seed, envelopeId, retrievals, thirdPartyData, formTemplate).map(
               _.toEither))
       valRes <- EitherT(validateUsingValidators(section, data).map(_.toEither))
     } yield valRes

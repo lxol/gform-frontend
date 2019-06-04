@@ -58,6 +58,7 @@ object VisitIndex {
 
 case class Form(
   _id: FormId,
+  seed: Seed,
   envelopeId: EnvelopeId,
   userId: UserId,
   formTemplateId: FormTemplateId,
@@ -70,6 +71,17 @@ case class Form(
 )
 
 object Form {
+
+  private val readEnvelopeId: Reads[EnvelopeId] =
+    (__ \ "envelopeId").readNullable[EnvelopeId].map(_.getOrElse(EnvelopeId("")))
+
+  private val seedWithFallbackToEnvelopeId: Reads[Seed] =
+    (__ \ "seed").read[Seed].orElse {
+      (__ \ "envelopeId").readNullable[EnvelopeId].map {
+        case Some(envelopeId) => Seed(envelopeId.value)
+        case None             => Seed("")
+      }
+    }
 
   private val thirdPartyDataWithFallback: Reads[ThirdPartyData] =
     (__ \ "thirdPartyData").read[ThirdPartyData]
@@ -90,6 +102,7 @@ object Form {
 
   private val reads: Reads[Form] = (
     (FormId.format: Reads[FormId]) and
+      seedWithFallbackToEnvelopeId and
       EnvelopeId.format and
       UserId.oformat and
       FormTemplateId.vformat and
@@ -104,6 +117,7 @@ object Form {
   private val writes: OWrites[Form] = OWrites[Form](
     form =>
       FormId.format.writes(form._id) ++
+        Seed.format.writes(form.seed) ++
         EnvelopeId.format.writes(form.envelopeId) ++
         UserId.oformat.writes(form.userId) ++
         FormTemplateId.oformat.writes(form.formTemplateId) ++

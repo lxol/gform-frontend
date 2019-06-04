@@ -117,7 +117,7 @@ class ProcessDataService[F[_]: Monad, E](recalculation: Recalculation[F, E]) {
                                  cache.formTemplate,
                                  cache.retrievals,
                                  cache.form.thirdPartyData,
-                                 cache.form.envelopeId)
+                                 cache.form.seed)
     } yield {
       val sections = RepeatingComponentService.getAllSections(cache.formTemplate, formDataRecalculated)
       (formDataRecalculated, sections)

@@ -16,34 +16,28 @@
 
 package uk.gov.hmrc.gform.graph
 
-import cats.{ Applicative, Monad, MonadError }
-import cats.syntax.eq._
-import cats.syntax.either._
-import cats.syntax.functor._
-import cats.syntax.flatMap._
-import cats.syntax.applicative._
-import cats.syntax.traverse._
 import cats.data.EitherT
-import java.text.NumberFormat
-import java.util.Locale
-
-import scala.language.higherKinds
+import cats.syntax.applicative._
+import cats.syntax.either._
+import cats.syntax.eq._
+import cats.syntax.flatMap._
+import cats.syntax.functor._
+import cats.{ Applicative, Monad, MonadError }
 import scalax.collection.Graph
-import scalax.collection.GraphPredef._
 import scalax.collection.GraphEdge._
-import uk.gov.hmrc.gform.auth.models.{ AnonymousRetrievals, AuthenticatedRetrievals, MaterialisedRetrievals }
+import uk.gov.hmrc.gform.auth.models.MaterialisedRetrievals
 import uk.gov.hmrc.gform.commons.{ BigDecimalUtil, NumberFormatUtil }
 import uk.gov.hmrc.gform.gform.AuthContextPrepop
 import uk.gov.hmrc.gform.graph.processor.UserCtxEvaluatorProcessor
-import uk.gov.hmrc.gform.models.ExpandUtils
-import uk.gov.hmrc.gform.sharedmodel.{ AffinityGroupUtil, IdNumberValue, RecalculatedTaxPeriodKey }
-import uk.gov.hmrc.gform.sharedmodel.form.{ EnvelopeId, FormDataRecalculated, ThirdPartyData, ValidationResult }
+import uk.gov.hmrc.gform.models.helpers.FormComponentHelper.extractMaxFractionalDigits
+import uk.gov.hmrc.gform.sharedmodel.form.{ FormDataRecalculated, Seed, ThirdPartyData }
 import uk.gov.hmrc.gform.sharedmodel.formtemplate._
 import uk.gov.hmrc.gform.sharedmodel.graph.{ DependencyGraph, GraphNode, IncludeIfGN, SimpleGN }
-import uk.gov.hmrc.gform.models.helpers.FormComponentHelper.extractMaxFractionalDigits
-import uk.gov.hmrc.gform.sharedmodel.AffinityGroupUtil._
+import uk.gov.hmrc.gform.sharedmodel.{ IdNumberValue, RecalculatedTaxPeriodKey }
 import uk.gov.hmrc.gform.submission.SubmissionRef
 import uk.gov.hmrc.http.HeaderCarrier
+
+import scala.language.higherKinds
 
 sealed trait RecalculationOp extends Product with Serializable
 
@@ -82,13 +76,13 @@ class Recalculation[F[_]: Monad, E](
     formTemplate: FormTemplate,
     retrievals: MaterialisedRetrievals,
     thirdPartyData: ThirdPartyData,
-    envelopeId: EnvelopeId)(implicit hc: HeaderCarrier, me: MonadError[F, E]): F[FormDataRecalculated] =
+    seed: Seed)(implicit hc: HeaderCarrier, me: MonadError[F, E]): F[FormDataRecalculated] =
     recalculateFormDataWithLookup(
       data,
       formTemplate,
       retrievals,
       thirdPartyData,
-      envelopeId,
+      seed,
       Map.empty
     )
 
@@ -97,11 +91,11 @@ class Recalculation[F[_]: Monad, E](
     formTemplate: FormTemplate,
     retrievals: MaterialisedRetrievals,
     thirdPartyData: ThirdPartyData,
-    envelopeId: EnvelopeId,
+    seed: Seed,
     additionalFcLookup: Map[FormComponentId, FormComponent])(
     implicit hc: HeaderCarrier,
     me: MonadError[F, E]): F[FormDataRecalculated] =
-    recalculateFormData_(data, formTemplate, retrievals, thirdPartyData, envelopeId, additionalFcLookup).value.flatMap {
+    recalculateFormData_(data, formTemplate, retrievals, thirdPartyData, seed, additionalFcLookup).value.flatMap {
       case Left(graphException) => me.raiseError(error(graphException))
       case Right(fd)            => fd.pure[F]
     }
@@ -111,7 +105,7 @@ class Recalculation[F[_]: Monad, E](
     formTemplate: FormTemplate,
     retrievals: MaterialisedRetrievals,
     thirdPartyData: ThirdPartyData,
-    envelopeId: EnvelopeId,
+    seed: Seed,
     additionalFcLookup: Map[FormComponentId, FormComponent])(
     implicit hc: HeaderCarrier): EitherT[F, GraphException, FormDataRecalculated] = {
 
@@ -142,14 +136,7 @@ class Recalculation[F[_]: Monad, E](
         case n @ IncludeIfGN(_, includeIf) =>
           val isSectionVisible: F[Boolean] =
             booleanExprEval
-              .isTrue(
-                includeIf.expr,
-                dataLookup.data,
-                retrievals,
-                visibilitySet,
-                thirdPartyData,
-                envelopeId,
-                formTemplate)
+              .isTrue(includeIf.expr, dataLookup.data, retrievals, visibilitySet, thirdPartyData, seed, formTemplate)
           for {
             sectionVisible <- isSectionVisible
           } yield {
@@ -199,7 +186,7 @@ class Recalculation[F[_]: Monad, E](
                                  retrievals,
                                  formTemplate,
                                  thirdPartyData,
-                                 envelopeId))
+                                 seed))
             } yield recalculated
         }
       }
@@ -260,14 +247,14 @@ class Recalculation[F[_]: Monad, E](
     retrievals: MaterialisedRetrievals,
     formTemplate: FormTemplate,
     thirdPartyData: ThirdPartyData,
-    envelopeId: EnvelopeId)(implicit hc: HeaderCarrier): F[Either[GraphException, RecData]] =
+    seed: Seed)(implicit hc: HeaderCarrier): F[Either[GraphException, RecData]] =
     Either.fromOption(fcLookup.get(fcId), NoFormComponent(fcId, fcLookup)).traverse { fc =>
       if ((fc.editable || fc.derived) && (hasData(fc, dataLookup.data) && !isHmrcTaxPeriodComponent(fc)))
         dataLookup.pure[F]
       else
         fc match {
           case IsHmrcTaxPeriod(taxPeriod) =>
-            recalculate(fc, visSet, dataLookup, retrievals, formTemplate, thirdPartyData, envelopeId).map {
+            recalculate(fc, visSet, dataLookup, retrievals, formTemplate, thirdPartyData, seed).map {
               case SetEmpty => dataLookup
               case NoChange => dataLookup
               case NewValue(value) =>
@@ -276,7 +263,7 @@ class Recalculation[F[_]: Monad, E](
                   taxPeriod) -> IdNumberValue(value)))
             }
           case IsText(_) | IsTextArea(_) =>
-            recalculate(fc, visSet, dataLookup, retrievals, formTemplate, thirdPartyData, envelopeId).map {
+            recalculate(fc, visSet, dataLookup, retrievals, formTemplate, thirdPartyData, seed).map {
               case SetEmpty        => dataLookup.copy(data = dataLookup.data + (fcId -> Seq("")))
               case NoChange        => dataLookup
               case NewValue(value) => dataLookup.copy(data = dataLookup.data + (fcId -> Seq(value)))
@@ -292,12 +279,12 @@ class Recalculation[F[_]: Monad, E](
     retrievals: MaterialisedRetrievals,
     formTemplate: FormTemplate,
     thirdPartyData: ThirdPartyData,
-    envelopeId: EnvelopeId)(implicit hc: HeaderCarrier): F[RecalculationOp] =
+    seed: Seed)(implicit hc: HeaderCarrier): F[RecalculationOp] =
     fc match {
       case HasExpr(SingleExpr(expr)) =>
         val conv: Convertible[F] =
           booleanExprEval.evaluator
-            .eval(visSet, fc.id, expr, dataLookup.data, retrievals, formTemplate, thirdPartyData, envelopeId)
+            .eval(visSet, fc.id, expr, dataLookup.data, retrievals, formTemplate, thirdPartyData, seed)
         val maxFractionDigitsAndRoundingMode = extractMaxFractionalDigits(fc)
 
         Convertible.round(
@@ -333,7 +320,7 @@ class Evaluator[F[_]: Monad](
     retrievals: MaterialisedRetrievals,
     formTemplate: FormTemplate,
     thirdPartyData: ThirdPartyData,
-    envelopeId: EnvelopeId)(implicit hc: HeaderCarrier): Convertible[F] =
+    seed: Seed)(implicit hc: HeaderCarrier): Convertible[F] =
     expr match {
       case Value                               => getSubmissionData(dataLookup, fcId)
       case HmrcRosmRegistrationCheck(rosmProp) => NonConvertible(evalRosm(thirdPartyData, rosmProp).pure[F])
@@ -343,14 +330,14 @@ class Evaluator[F[_]: Monad](
         NonConvertible(RecalculationOp.newValue(AuthContextPrepop.values(value, retrievals)).pure[F])
       case EeittCtx(eeitt) =>
         NonConvertible(eeittPrepop(eeitt, retrievals, formTemplate, hc).map(RecalculationOp.newValue))
-      case SubmissionReference => NonConvertible(RecalculationOp.newValue(SubmissionRef(envelopeId).toString).pure[F])
+      case SubmissionReference => NonConvertible(RecalculationOp.newValue(SubmissionRef(seed.value).toString).pure[F])
       case Constant(fc)        => MaybeConvertible(fc.pure[F])
       case fc @ FormCtx(_) =>
         if (isHidden(fc.toFieldId, visSet)) MaybeConvertibleHidden(defaultF, fc.toFieldId)
         else getSubmissionData(dataLookup, fc.toFieldId)
       case Sum(fc @ FormCtx(value)) =>
         if (isHidden(fc.toFieldId, visSet)) MaybeConvertibleHidden(defaultF, fc.toFieldId)
-        else sum(visSet, fcId, value, dataLookup, retrievals, formTemplate, thirdPartyData, envelopeId)
+        else sum(visSet, fcId, value, dataLookup, retrievals, formTemplate, thirdPartyData, seed)
       case Sum(_) => NonConvertible(RecalculationOp.noChange.pure[F])
       case Add(f1, f2) =>
         Converted(
@@ -364,7 +351,7 @@ class Evaluator[F[_]: Monad](
             formTemplate,
             (_, _) => doComputation(_ + _),
             thirdPartyData,
-            envelopeId))
+            seed))
       case Subtraction(f1, f2) =>
         Converted(
           makeCalc(
@@ -377,7 +364,7 @@ class Evaluator[F[_]: Monad](
             formTemplate,
             (_, _) => doComputation(_ - _),
             thirdPartyData,
-            envelopeId))
+            seed))
       case Multiply(f1, f2) =>
         Converted(
           makeCalc(
@@ -390,7 +377,7 @@ class Evaluator[F[_]: Monad](
             formTemplate,
             (_, _) => doComputation(_ * _),
             thirdPartyData,
-            envelopeId))
+            seed))
     }
   private def getSubmissionData(dataLookup: Data, fcId: FormComponentId): Convertible[F] =
     dataLookup.get(fcId).flatMap(_.headOption) match {
@@ -406,12 +393,12 @@ class Evaluator[F[_]: Monad](
     retrievals: MaterialisedRetrievals,
     formTemplate: FormTemplate,
     thirdPartyData: ThirdPartyData,
-    envelopeId: EnvelopeId)(implicit hc: HeaderCarrier) = {
+    seed: Seed)(implicit hc: HeaderCarrier) = {
     val results = dataLookup.collect {
       case (key, value) if key.value.endsWith(fc) => Constant(value.headOption.getOrElse(""))
     }
     val summation = results.foldLeft(Expr.additionIdentityExpr)(Add)
-    eval(visSet, fcId, summation, dataLookup, retrievals, formTemplate, thirdPartyData, envelopeId)
+    eval(visSet, fcId, summation, dataLookup, retrievals, formTemplate, thirdPartyData, seed)
   }
 
   def isHidden(fcId: FormComponentId, visSet: Set[GraphNode]): Boolean =
@@ -438,10 +425,10 @@ class Evaluator[F[_]: Monad](
     formTemplate: FormTemplate,
     f: (Convertible[F], Convertible[F]) => (Option[BigDecimal], Option[BigDecimal]) => F[A],
     thirdPartyData: ThirdPartyData,
-    envelopeId: EnvelopeId
+    seed: Seed
   )(implicit hc: HeaderCarrier): F[A] = {
     def calc(expr: Expr): Convertible[F] =
-      eval(visSet, fcId, expr, dataLookup, retrievals, formTemplate, thirdPartyData, envelopeId)
+      eval(visSet, fcId, expr, dataLookup, retrievals, formTemplate, thirdPartyData, seed)
 
     val x = calc(xExpr)
     val y = calc(yExpr)

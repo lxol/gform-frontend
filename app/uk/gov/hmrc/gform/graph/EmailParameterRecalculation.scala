@@ -34,7 +34,7 @@ case class EmailParameterRecalculation(cache: AuthCacheWithForm)(implicit ex: Ex
         formTemplateWithParametersAsComponents,
         cache.retrievals,
         cache.form.thirdPartyData,
-        cache.form.envelopeId)
+        cache.form.seed)
       .map(mapToParameterTemplateVariables)
 
   private def mkFormComponent(fcId: String, ct: ComponentType) =

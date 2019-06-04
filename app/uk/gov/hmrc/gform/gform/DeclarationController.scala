@@ -125,6 +125,7 @@ class DeclarationController(
     validationService.validateComponents(
       Fields.flattenGroups(cache.formTemplate.declarationSection.fields),
       declarationData,
+      cache.form.seed,
       cache.form.envelopeId,
       cache.retrievals,
       cache.form.thirdPartyData,
@@ -144,7 +145,7 @@ class DeclarationController(
       cache.formTemplate,
       cache.retrievals,
       cache.form.thirdPartyData,
-      cache.form.envelopeId)
+      cache.form.seed)
 
   private def extractFormDataFields(cache: AuthCacheWithForm) =
     cache.form.formData.fields.map {

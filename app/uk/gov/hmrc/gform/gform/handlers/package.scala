@@ -64,6 +64,7 @@ package object handlers {
   type ValidateFormComponents[F[_]] = (
     List[FormComponent],
     Section,
+    Seed,
     EnvelopeId,
     MaterialisedRetrievals,
     ThirdPartyData,

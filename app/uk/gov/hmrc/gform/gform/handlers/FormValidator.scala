@@ -23,7 +23,7 @@ import uk.gov.hmrc.gform.fileupload.Envelope
 import uk.gov.hmrc.gform.models.ExpandUtils.{ nonSubmittedFCsOfNonGroup, submittedFCs }
 import uk.gov.hmrc.gform.models.ProcessData
 import uk.gov.hmrc.gform.models.gform.{ FormComponentValidation, FormValidationOutcome }
-import uk.gov.hmrc.gform.sharedmodel.form.{ EnvelopeId, FormDataRecalculated, ThirdPartyData, ValidationResult }
+import uk.gov.hmrc.gform.sharedmodel.form.{ EnvelopeId, FormDataRecalculated, Seed, ThirdPartyData, ValidationResult }
 import uk.gov.hmrc.gform.sharedmodel.formtemplate._
 import uk.gov.hmrc.gform.validation.FormFieldValidationResult
 import uk.gov.hmrc.gform.validation.ValidationUtil.ValidatedType
@@ -50,6 +50,7 @@ class FormValidator(implicit ec: ExecutionContext) {
       data,
       sections,
       sn,
+      cache.form.seed,
       cache.form.envelopeId,
       cache.retrievals,
       cache.form.thirdPartyData,
@@ -70,6 +71,7 @@ class FormValidator(implicit ec: ExecutionContext) {
     formDataRecalculated: FormDataRecalculated,
     sections: List[Section],
     sectionNumber: SectionNumber,
+    seed: Seed,
     envelopeId: EnvelopeId,
     retrievals: MaterialisedRetrievals,
     thirdPartyData: ThirdPartyData,
@@ -90,6 +92,7 @@ class FormValidator(implicit ec: ExecutionContext) {
       v <- validateFormComponents(
             sectionFields,
             section,
+            seed,
             envelopeId,
             retrievals,
             thirdPartyData,

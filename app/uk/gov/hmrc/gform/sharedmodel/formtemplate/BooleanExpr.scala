@@ -17,18 +17,18 @@
 package uk.gov.hmrc.gform.sharedmodel.formtemplate
 
 import cats.Monad
-import cats.syntax.functor._
-import cats.syntax.flatMap._
 import cats.syntax.applicative._
+import cats.syntax.flatMap._
+import cats.syntax.functor._
 import julienrf.json.derived
 import play.api.libs.json._
-
-import scala.language.higherKinds
 import uk.gov.hmrc.gform.auth.models.MaterialisedRetrievals
 import uk.gov.hmrc.gform.graph.{ Convertible, Evaluator, NewValue }
-import uk.gov.hmrc.gform.sharedmodel.form.{ EnvelopeId, ThirdPartyData, ValidationResult }
+import uk.gov.hmrc.gform.sharedmodel.form.{ Seed, ThirdPartyData }
 import uk.gov.hmrc.gform.sharedmodel.graph.GraphNode
 import uk.gov.hmrc.http.HeaderCarrier
+
+import scala.language.higherKinds
 
 sealed trait BooleanExpr
 final case class Equals(left: Expr, right: Expr) extends BooleanExpr
@@ -56,11 +56,11 @@ class BooleanExprEval[F[_]: Monad](
     retrievals: MaterialisedRetrievals,
     visSet: Set[GraphNode],
     thirdPartyData: ThirdPartyData,
-    envelopeId: EnvelopeId,
+    seed: Seed,
     formTemplate: FormTemplate)(implicit hc: HeaderCarrier): F[Boolean] = {
 
     def loop(expr: BooleanExpr): F[Boolean] =
-      isTrue(expr, data, retrievals, visSet, thirdPartyData, envelopeId, formTemplate)
+      isTrue(expr, data, retrievals, visSet, thirdPartyData, seed, formTemplate)
 
     def compare(
       leftField: Expr,
@@ -97,7 +97,7 @@ class BooleanExprEval[F[_]: Monad](
           formTemplate,
           doComparison,
           thirdPartyData,
-          envelopeId)
+          seed)
     }
 
     expr match {

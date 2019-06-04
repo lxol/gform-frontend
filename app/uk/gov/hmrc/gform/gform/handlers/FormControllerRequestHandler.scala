@@ -52,6 +52,7 @@ class FormControllerRequestHandler(formValidator: FormValidator)(implicit ec: Ex
     sectionNumber: SectionNumber,
     suppressErrors: SuppressErrors,
     cache: AuthCacheWithForm,
+    seed: Seed,
     envelopeId: EnvelopeId,
     retrievals: MaterialisedRetrievals,
     data: FormDataRecalculated,
@@ -69,13 +70,15 @@ class FormControllerRequestHandler(formValidator: FormValidator)(implicit ec: Ex
           data,
           sections,
           sectionNumber,
+          seed,
           envelopeId,
           retrievals,
           cache.form.thirdPartyData,
           cache.formTemplate,
           envelopeF,
           validateFormComponents,
-          evaluateValidation)
+          evaluateValidation
+        )
     }
 
   def handleForm(
@@ -87,6 +90,7 @@ class FormControllerRequestHandler(formValidator: FormValidator)(implicit ec: Ex
     validateFormComponents: ValidateFormComponents[Future],
     evaluateValidation: EvaluateValidation
   )(implicit hc: HeaderCarrier, request: Request[AnyContent]): Future[FormHandlerResult] = {
+    val seed = cache.form.seed
     val envelopeId = cache.form.envelopeId
     val retrievals = cache.retrievals
 
@@ -96,6 +100,7 @@ class FormControllerRequestHandler(formValidator: FormValidator)(implicit ec: Ex
                                        sectionNumber,
                                        suppressErrors,
                                        cache,
+                                       seed,
                                        envelopeId,
                                        retrievals,
                                        data,
@@ -154,6 +159,7 @@ class FormControllerRequestHandler(formValidator: FormValidator)(implicit ec: Ex
     formDataRecalculated: FormDataRecalculated,
     sections: List[Section],
     sectionNumber: SectionNumber,
+    seed: Seed,
     envelopeId: EnvelopeId,
     retrievals: MaterialisedRetrievals,
     thirdPartyData: ThirdPartyData,
@@ -167,13 +173,15 @@ class FormControllerRequestHandler(formValidator: FormValidator)(implicit ec: Ex
       formDataRecalculated,
       sections,
       sectionNumber,
+      seed,
       envelopeId,
       retrievals,
       thirdPartyData,
       formTemplate,
       envelopeF,
       validateFormComponents,
-      evaluateValidation)
+      evaluateValidation
+    )
 }
 
 case class FormHandlerResult(
