@@ -199,7 +199,7 @@ class FormController(
               Future.successful(Redirect(routes.FormController.newFormAgent(formTemplateId, lang)))
             case AgentAccessCode.optionAccess => {
               val maybeAccessCode: Option[AccessCode] = accessCodeF.accessCode.map(a => AccessCode(a))
-              println("+++++++++++++++++++++ I AM TRYING TO POST THE FORM +++++++++++++++++++++++++")
+              println("+++++++++++++++++++++ I AM TRYING TO POST THE FORM +++++++++++++++++++++++++") //TODO: take out
               for {
                 maybeForm <- getForm(FormId(cache.retrievals, formTemplateId, maybeAccessCode))
                 res <- maybeForm match {
@@ -223,7 +223,7 @@ class FormController(
     }
 
   private def getOfstedForm(formId: FormId)(implicit hc: HeaderCarrier): Future[Option[Form]] = {
-    println("\n\n\n\n ++++++++++ I GOT HERE TOO 2++++++++++\n\n\n\n")
+    println("\n\n\n\n ++++++++++ I GOT HERE TOO 2++++++++++\n\n\n\n") //TODO: take out
     for {
       maybeForm <- gformConnector.maybeForm(formId)
       maybeFormExceptSubmitted = maybeForm.filter(_.status != Submitted)
@@ -236,7 +236,7 @@ class FormController(
   }
 
   private def getForm(formId: FormId)(implicit hc: HeaderCarrier): Future[Option[Form]] = {
-    println("++++++++++++ I SHOULD DEFO NOT BE HERE ++++++++++++++++++++++++++++++")
+    println("++++++++++++ I SHOULD DEFO NOT BE HERE ++++++++++++++++++++++++++++++") //TODO: take out
     for {
       maybeForm <- gformConnector.maybeForm(formId)
       maybeFormExceptSubmitted = maybeForm.filter(_.status != Submitted)
@@ -255,7 +255,7 @@ class FormController(
     formTemplateId: FormTemplateId,
     retrievals: MaterialisedRetrievals,
     maybeAccessCode: Option[AccessCode])(implicit hc: HeaderCarrier): Future[FormId] = {
-    println("\n\n\n\n ++++++++++ I GOT HERE TOO 2++++++++++\n\n\n\n")
+    println("\n\n\n\n ++++++++++ I GOT HERE TOO 2++++++++++\n\n\n\n") //TODO: take out
     for {
       formId <- gformConnector.newForm(formTemplateId, UserId(retrievals), maybeAccessCode)
     } yield formId
@@ -279,7 +279,7 @@ class FormController(
     formTemplateId: FormTemplateId,
     retrievals: MaterialisedRetrievals,
     maybeAccessCode: Option[AccessCode])(implicit hc: HeaderCarrier): Future[(FormId, Boolean)] = {
-    println("\n\n\n\n ++++++++++ I GOT HERE TOO 1 ++++++++++\n\n\n\n")
+    println("\n\n\n\n ++++++++++ I GOT HERE TOO 1 ++++++++++\n\n\n\n") //TODO: take out
     for {
       maybeFormExceptSubmitted <- getOfstedForm(FormId(retrievals, formTemplateId, None))
       formId <- maybeFormExceptSubmitted.fold(startFreshForm(formTemplateId, retrievals, maybeAccessCode))(
