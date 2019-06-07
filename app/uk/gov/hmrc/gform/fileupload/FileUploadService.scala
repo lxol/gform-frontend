@@ -20,11 +20,12 @@ import uk.gov.hmrc.gform.sharedmodel.form.{ EnvelopeId, FileId }
 
 import scala.concurrent.Future
 import uk.gov.hmrc.http.HeaderCarrier
-
+import scala.concurrent.ExecutionContext.Implicits.global
 class FileUploadService(fileUploadConnector: FileUploadConnector) {
 
   def getEnvelope(envelopeId: EnvelopeId)(implicit hc: HeaderCarrier): Future[Envelope] =
-    fileUploadConnector.getEnvelope(envelopeId)
+    // fileUploadConnector.getEnvelope(envelopeId) //TODO: need to check the environment here; if OFTSED do something else
+    Future { Envelope(List()) }
 
   def getMaybeEnvelope(envelopeId: EnvelopeId)(implicit hc: HeaderCarrier): Future[Option[Envelope]] =
     fileUploadConnector.getMaybeEnvelope(envelopeId)

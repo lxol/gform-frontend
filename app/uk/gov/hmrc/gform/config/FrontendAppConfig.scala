@@ -18,6 +18,7 @@ package uk.gov.hmrc.gform.config
 import play.api.i18n.Lang
 
 case class FrontendAppConfig(
+  gformEnvironment: String,
   assetsPrefix: String,
   analyticsToken: String,
   analyticsHost: String,
