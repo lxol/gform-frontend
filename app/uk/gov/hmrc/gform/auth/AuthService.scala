@@ -77,6 +77,7 @@ class AuthService(
   private val decoder = Base64.getDecoder
 
   private def performAWSALBAuth()(implicit hc: HeaderCarrier): AuthResult = {
+    Logger.debug(hc.otherHeaders.toString())
     val encodedJWT: Option[String] = hc.otherHeaders.collectFirst {
       case (header, value) if header === "x-amzn-oidc-data" => value
     }
