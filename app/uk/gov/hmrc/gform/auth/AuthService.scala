@@ -84,7 +84,7 @@ class AuthService(
     Logger.debug("HTTP OTHER HEADERS: " + hc.otherHeaders.toString())
 
     val encodedJWT: Option[String] = hc.otherHeaders.collectFirst {
-      case (header, value) if header === "x-amzn-oidc-data" => value
+      case (header, value) if header === "X-Amzn-Oidc-Data" => value
     }
 
     Logger.debug("Encoded JWT: " + encodedJWT.toString)
