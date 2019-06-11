@@ -71,6 +71,10 @@ class AuthService(
           case authUnsuccessful  => Future.successful(authUnsuccessful)
         }
         performAgent(agentAccess, formTemplate, lang, ggAuthorised(RecoverAuthResult.noop), ifSuccessPerformEnrolment)
+      case _ => {
+        Logger.debug("OFSTED-AWS : Could not authorize")
+        Future.successful(notAuthorized)
+      }
     }
 
   private val notAuthorized: AuthResult = AuthBlocked("You are not authorized to access this service")
