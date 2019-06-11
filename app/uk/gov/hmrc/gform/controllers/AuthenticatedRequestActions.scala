@@ -150,6 +150,7 @@ class AuthenticatedRequestActions(
   def async(formTemplateId: FormTemplateId, lang: Option[String], maybeAccessCode: Option[AccessCode])(
     f: Request[AnyContent] => AuthCacheWithForm => Future[Result]): Action[AnyContent] =
     Action.async { implicit request =>
+      Logger.debug("AUTH ASYNC REQUEST: " + request.headers.toString)
       for {
         formTemplate <- gformConnector.getFormTemplate(formTemplateId)
         authResult <- authService

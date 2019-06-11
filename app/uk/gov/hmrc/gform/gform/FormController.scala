@@ -432,8 +432,12 @@ class FormController(
     maybeAccessCode: Option[AccessCode],
     sectionNumber: SectionNumber,
     lang: Option[String]
-  ) = auth.async(formTemplateId, lang, maybeAccessCode) { implicit request => cache =>
-    processResponseDataFromBody(request) { (dataRaw: Data) =>
+  ) = auth.async(formTemplateId, lang, maybeAccessCode) {
+
+    implicit request => cache =>
+    processResponseDataFromBody(request) {
+
+      (dataRaw: Data) =>
       def validateAndUpdateData(cache: AuthCacheWithForm, processData: ProcessData)(
         toResult: Option[SectionNumber] => Result): Future[Result] =
         for {
