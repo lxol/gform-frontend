@@ -16,11 +16,12 @@
 
 package uk.gov.hmrc.gform.graph
 
+import cats.data.NonEmptyList
 import org.scalactic.source.Position
 import org.scalatest.{ FlatSpec, Matchers }
+import uk.gov.hmrc.gform.Helpers.toLocalisedString
 import uk.gov.hmrc.gform.sharedmodel.formtemplate._
 import uk.gov.hmrc.gform.sharedmodel.graph.DependencyGraph._
-import uk.gov.hmrc.gform.sharedmodel.graph._
 import FormTemplateBuilder._
 
 class DependencyGraphSpec extends FlatSpec with Matchers {
@@ -61,6 +62,27 @@ class DependencyGraphSpec extends FlatSpec with Matchers {
     layers(sections) shouldBe List(
       (0, List("b")),
       (1, List("a"))
+    )
+  }
+
+  it should "handle RevealingChoice component" in {
+    val sections = List(
+      mkSection(
+        List(
+          mkFormComponent("a", Value),
+          mkFormComponent(
+            "b",
+            RevealingChoice(
+              NonEmptyList.one(
+                RevealingChoiceElement(toLocalisedString("Yes"), mkFormComponent("c", FormCtx("a")) :: Nil, false)))),
+          mkFormComponent("d", FormCtx("c"))
+        )
+      )
+    )
+    layers(sections) shouldBe List(
+      (0, List("d")),
+      (1, List("c")),
+      (2, List("a"))
     )
   }
 
@@ -225,19 +247,35 @@ class DependencyGraphSpec extends FlatSpec with Matchers {
     )
   }
 
+  it should "handle includeIf's boolean expression with revealingChoice" in {
+
+    val includeIf = IncludeIf(Equals(FormCtx("a"), Constant("0")))
+
+    val sections =
+      mkSection(
+        List(
+          mkFormComponent(
+            "a",
+            RevealingChoice(NonEmptyList.one(
+              RevealingChoiceElement(toLocalisedString("Yes"), mkFormComponent("b", Value) :: Nil, false)))))) ::
+        mkSectionIncludeIf(List(mkFormComponent("c", Value)), includeIf) :: Nil
+
+    layers(sections) shouldBe List(
+      (0, List("c")),
+      (1, List("includeIf_1")),
+      (2, List("a"))
+    )
+  }
+
   private def layers(sections: List[Section])(implicit position: Position): List[(Int, List[String])] =
-    constructDepencyGraph(toGraphFull(mkFormTemplate(sections))) match {
+    constructDependencyGraph(toGraphFull(mkFormTemplate(sections))) match {
       case Left(e) => fail
       case Right(topOrder) =>
         topOrder.toList.map {
           case (index, items) =>
             (
               index,
-              items.toList
-                .map {
-                  case SimpleGN(fcId)       => fcId.value
-                  case IncludeIfGN(fcId, _) => fcId.value
-                }
+              items.map(_.formComponentId.value)
             )
         }
     }

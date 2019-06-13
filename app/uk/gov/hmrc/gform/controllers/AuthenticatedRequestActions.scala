@@ -24,10 +24,11 @@ import java.util.UUID
 
 import play.api.Logger
 import play.api.http.HeaderNames
-import play.api.i18n.I18nSupport
+import play.api.i18n.{ I18nSupport, Lang, Langs }
 import play.api.libs.json.Json
 import play.api.mvc.Results._
 import play.api.mvc._
+
 import scala.concurrent.ExecutionContext
 import uk.gov.hmrc.auth.core.{ AuthConnector => _, _ }
 import uk.gov.hmrc.gform.auth._
@@ -54,6 +55,7 @@ class AuthenticatedRequestActions(
   frontendAppConfig: FrontendAppConfig,
   val authConnector: AuthConnector,
   i18nSupport: I18nSupport,
+  langs: Langs,
   errResponder: ErrResponder
 )(
   implicit ec: ExecutionContext
@@ -109,63 +111,59 @@ class AuthenticatedRequestActions(
     } yield result
   }
 
-  def async(formTemplateId: FormTemplateId, lang: Option[String])(
-    f: Request[AnyContent] => AuthCacheWithoutForm => Future[Result]): Action[AnyContent] = Action.async {
+  def getCurrentLanguage(request: Request[AnyContent]) = {
+    val maybeLangFromCookie = request.cookies.get(messagesApi.langCookieName).flatMap(c => Lang.get(c.value))
+    val lang: Lang = langs.preferred(maybeLangFromCookie.toSeq ++ request.acceptLanguages)
+    LangADT.stringToLangADT(lang.code)
+  }
+
+  def async(formTemplateId: FormTemplateId)(
+    f: Request[AnyContent] => LangADT => AuthCacheWithoutForm => Future[Result]): Action[AnyContent] = Action.async {
     implicit request =>
+      implicit val l: LangADT = getCurrentLanguage(request)
       for {
         formTemplate <- gformConnector.getFormTemplate(formTemplateId)
         authResult <- authService
-                       .authenticateAndAuthorise(
-                         formTemplate,
-                         lang,
-                         request.uri,
-                         getAffinityGroup,
-                         ggAuthorised(request))
+                       .authenticateAndAuthorise(formTemplate, request.uri, getAffinityGroup, ggAuthorised(request))
         newRequest = removeEeittAuthIdFromSession(request, formTemplate.authConfig)
         result <- handleAuthResults(
                    authResult,
                    formTemplate,
                    request,
-                   onSuccess = retrievals => f(newRequest)(AuthCacheWithoutForm(retrievals, formTemplate))
+                   onSuccess = retrievals => f(newRequest)(l)(AuthCacheWithoutForm(retrievals, formTemplate))
                  )
       } yield result
   }
 
   def asyncGGAuth(formTemplateId: FormTemplateId)(
-    f: Request[AnyContent] => AuthCacheWithoutForm => Future[Result]): Action[AnyContent] = Action.async {
+    f: Request[AnyContent] => LangADT => AuthCacheWithoutForm => Future[Result]): Action[AnyContent] = Action.async {
     implicit request =>
       val predicate = AuthProviders(AuthProvider.GovernmentGateway)
-
       for {
         formTemplate <- gformConnector.getFormTemplate(formTemplateId)
         authResult   <- ggAuthorised(request)(RecoverAuthResult.noop)(predicate)
         result <- authResult match {
                    case AuthSuccessful(retrievals) =>
-                     f(request)(AuthCacheWithoutForm(retrievals, formTemplate))
+                     f(request)(getCurrentLanguage(request))(AuthCacheWithoutForm(retrievals, formTemplate))
                    case _ => errResponder.forbidden(request, "Access denied")
                  }
       } yield result
   }
 
-  def async(formTemplateId: FormTemplateId, lang: Option[String], maybeAccessCode: Option[AccessCode])(
-    f: Request[AnyContent] => AuthCacheWithForm => Future[Result]): Action[AnyContent] =
+  def async(formTemplateId: FormTemplateId, maybeAccessCode: Option[AccessCode])(
+    f: Request[AnyContent] => LangADT => AuthCacheWithForm => Future[Result]): Action[AnyContent] =
     Action.async { implicit request =>
-      Logger.debug("AUTH ASYNC REQUEST: " + request.headers.toString)
+      implicit val l: LangADT = getCurrentLanguage(request)
       for {
         formTemplate <- gformConnector.getFormTemplate(formTemplateId)
         authResult <- authService
-                       .authenticateAndAuthorise(
-                         formTemplate,
-                         lang,
-                         request.uri,
-                         getAffinityGroup,
-                         ggAuthorised(request))
+                       .authenticateAndAuthorise(formTemplate, request.uri, getAffinityGroup, ggAuthorised(request))
         newRequest = removeEeittAuthIdFromSession(request, formTemplate.authConfig)
         result <- handleAuthResults(
                    authResult,
                    formTemplate,
                    request,
-                   onSuccess = withForm(f(newRequest))(maybeAccessCode, formTemplate)
+                   onSuccess = withForm(f(newRequest)(l))(maybeAccessCode, formTemplate)
                  )
       } yield result
     }
@@ -183,9 +181,7 @@ class AuthenticatedRequestActions(
     formTemplate: FormTemplate,
     request: Request[_],
     onSuccess: MaterialisedRetrievals => Future[Result]
-  )(
-    implicit
-    hc: HeaderCarrier): Future[Result] =
+  )(implicit l: LangADT, hc: HeaderCarrier): Future[Result] =
     result match {
       case AuthSuccessful(retrievals @ AWSALBRetrievals(_)) => onSuccess(retrievals)
       case AuthSuccessful(retrievals @ AnonymousRetrievals(_)) =>
@@ -198,7 +194,7 @@ class AuthenticatedRequestActions(
           .withSession(SessionKeys.sessionId -> s"anonymous-session-${UUID.randomUUID()}")
           .pure[Future]
       case AuthRedirectFlashingFormName(loginUrl) =>
-        Redirect(loginUrl).flashing("formTitle" -> formTemplate.formName).pure[Future]
+        Redirect(loginUrl).flashing("formTitle" -> formTemplate.formName.value).pure[Future]
       case AuthBlocked(message) =>
         Ok(
           views.html.error_template(

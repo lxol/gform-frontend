@@ -22,15 +22,15 @@
 @import uk.gov.hmrc.gform.config.FrontendAppConfig
 @import uk.gov.hmrc.gform.views.hardcoded.pages._
 @import java.time.format.DateTimeFormatter
+@import uk.gov.hmrc.gform.sharedmodel.LangADT
 
 
 @(
     envelopeExpiryDate: Option[EnvelopeExpiryDate],
     formTemplate: FormTemplate,
     call: Call,
-    lang: Option[String],
     frontendAppConfig: FrontendAppConfig
-)(implicit request: Request[_], messages: Messages)
+)(implicit request: Request[_], messages: Messages,l:LangADT)
 
 @formatter = @{DateTimeFormatter.ofPattern("dd MMMM yyyy")}
 @heading = @{"Your " + formCategory(formTemplate) + " has been saved"}
@@ -38,12 +38,14 @@
 
 @uk.gov.hmrc.gform.views.html.main_template(
   title = heading,
-  serviceName = formTemplate.formName,
+  serviceName = formTemplate.formName.value,
   bodyClasses = None,
   developmentPhase = formTemplate.developmentPhase.getOrElse(ResearchBanner),
   frontendAppConfig = frontendAppConfig,
   authConfig = Some(formTemplate.authConfig),
-  formCategory = formTemplate.formCategory
+  formCategory = formTemplate.formCategory,
+  languages = formTemplate.languages,
+  templateId = formTemplate._id
 ) {
 <div class = "transaction-banner--complete">
     <h1 class ="transaction-banner__heading">@heading</h1>
@@ -62,7 +64,7 @@
    </li>
    <li>
      delete and
-      <a href="@uk.gov.hmrc.gform.gform.routes.FormController.deleteOnExit(formTemplate._id, None, lang)">
+      <a href="@uk.gov.hmrc.gform.gform.routes.FormController.deleteOnExit(formTemplate._id, None)">
         start again
       </a>
    </li>

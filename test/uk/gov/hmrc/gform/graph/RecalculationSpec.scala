@@ -23,9 +23,9 @@ import org.scalatest.prop.TableDrivenPropertyChecks.{ Table, forAll }
 import org.scalatest.{ FlatSpec, Matchers }
 import uk.gov.hmrc.auth.core.{ Enrolment, EnrolmentIdentifier, Enrolments }
 import uk.gov.hmrc.gform.GraphSpec
-import uk.gov.hmrc.gform.Helpers.mkData
+import uk.gov.hmrc.gform.Helpers._
 import uk.gov.hmrc.gform.graph.FormTemplateBuilder._
-import uk.gov.hmrc.gform.sharedmodel.{ ExampleData, IdNumberValue, RecalculatedTaxPeriodKey }
+import uk.gov.hmrc.gform.sharedmodel._
 import uk.gov.hmrc.gform.sharedmodel.form.{ EnvelopeId, ThirdPartyData }
 import uk.gov.hmrc.gform.sharedmodel.formtemplate._
 import uk.gov.hmrc.http.HeaderCarrier
@@ -412,7 +412,8 @@ class RecalculationSpec extends FlatSpec with Matchers with GraphSpec {
   it should "not recalculate sections which are invisible based on choice component" in {
 
     val text = Text(AnyText, Value)
-    val choice = Choice(YesNo, NonEmptyList.of("yes", "no"), Vertical, List.empty, None)
+    val choice =
+      Choice(YesNo, NonEmptyList.of(toLocalisedString("yes"), toLocalisedString("no")), Vertical, List.empty, None)
 
     val formComponentIds = Table(
       // format: off
@@ -502,6 +503,65 @@ class RecalculationSpec extends FlatSpec with Matchers with GraphSpec {
         mkSection(List(mkFormComponent("c", Add(FormCtx("a"), FormCtx("b"))))) :: Nil
 
     forAll(formComponentIds) { (input, expectedOutput) ⇒
+      verify(input, expectedOutput, sections)
+    }
+  }
+
+  it should "recalculate fields on repeated sections" in {
+
+    val data = Table(
+      // format: off
+      ("input", "output"),
+      (mkData("a" -> "1", "b" -> "1", "c" -> "0", "d" -> "0", "e" -> "0"), mkData("a" -> "1", "b" -> "1", "c" -> "0", "d" -> "2", "e" -> "2"))
+      // format: on
+    )
+
+    val sections =
+      mkSection(List(mkFormComponent("a", Value))) ::
+        mkSection(List(mkFormComponent("b", Value))) ::
+        mkSection(
+        List(mkFormComponent(
+          "c",
+          RevealingChoice(NonEmptyList.of(
+            RevealingChoiceElement(
+              toLocalisedString("Yes"),
+              mkFormComponent("d", Add(FormCtx("a"), FormCtx("b"))) :: Nil,
+              false),
+            RevealingChoiceElement(
+              toLocalisedString("No"),
+              mkFormComponent("e", Add(FormCtx("a"), FormCtx("b"))) :: Nil,
+              false)
+          ))
+        ))) :: Nil
+
+    forAll(data) { (input, expectedOutput) ⇒
+      verify(input, expectedOutput, sections)
+    }
+
+  }
+
+  it should "detect non-selected fields on revealing choice component" in {
+    val data = Table(
+      // format: off
+      ("input", "output"),
+      (mkData("rc" -> "0", "a" -> "10", "b" -> "11"), mkData("rc" -> "0", "a" -> "10", "b" -> "11", "res" -> "10")),
+      (mkData("rc" -> "1", "a" -> "10", "b" -> "11"), mkData("rc" -> "1", "a" -> "10", "b" -> "11", "res" -> "11"))
+      // format: on
+    )
+
+    val sections =
+      mkSection(
+        List(mkFormComponent(
+          "rc",
+          RevealingChoice(NonEmptyList.of(
+            RevealingChoiceElement(toLocalisedString("Yes"), mkFormComponent("a", Value) :: Nil, false),
+            RevealingChoiceElement(toLocalisedString("No"), mkFormComponent("b", Value) :: Nil, false)
+          ))
+        ))) ::
+        mkSection(List(mkFormComponent("res", Add(FormCtx("a"), FormCtx("b"))))) ::
+        Nil
+
+    forAll(data) { (input, expectedOutput) ⇒
       verify(input, expectedOutput, sections)
     }
   }

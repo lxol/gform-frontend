@@ -23,17 +23,18 @@
 @import uk.gov.hmrc.gform.sharedmodel.AccessCode
 @import uk.gov.hmrc.gform.views.html.form.errors._
 @import uk.gov.hmrc.gform.views.hardcoded.pages._
+@import uk.gov.hmrc.gform.sharedmodel.LangADT
 
 @(
-  formTemplate: FormTemplate,
-  form: data.Form[_],
-  maybeAccessCode: Option[AccessCode],
-  lang: Option[String],
-  frontendAppConfig: FrontendAppConfig
+        formTemplate: FormTemplate,
+        form: data.Form[_],
+        maybeAccessCode: Option[AccessCode],
+        frontendAppConfig: FrontendAppConfig
 )(
   implicit
   request: Request[_],
-  messages: Messages
+  messages: Messages,
+  l:LangADT
 )
 
 @formCat = @{messages(s"formCategory.${formCategory(formTemplate)}")}
@@ -41,18 +42,20 @@
 
 @uk.gov.hmrc.gform.views.html.main_template(
   title = heading,
-  serviceName = formTemplate.formName,
+  serviceName = formTemplate.formName.value,
   developmentPhase = formTemplate.developmentPhase.getOrElse(ResearchBanner),
   frontendAppConfig = frontendAppConfig,
   authConfig = Some(formTemplate.authConfig),
-  formCategory = formTemplate.formCategory
+  formCategory = formTemplate.formCategory,
+  languages = formTemplate.languages,
+  templateId = formTemplate._id
 ) {
 
   @if(form.hasErrors) {
       @error_summary(form, formCat)
   }
 
-  <form action="@{uk.gov.hmrc.gform.gform.routes.FormController.decision(formTemplate._id, maybeAccessCode, lang).url}" method="POST">
+  <form action="@{uk.gov.hmrc.gform.gform.routes.FormController.decision(formTemplate._id, maybeAccessCode).url}" method="POST">
 
     @{CSRF.formField}
 

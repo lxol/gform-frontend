@@ -27,7 +27,7 @@ import uk.gov.hmrc.gform.lookup.LookupRegistry
 import uk.gov.hmrc.gform.sharedmodel.des.{ DesRegistrationRequest, DesRegistrationResponse, InternationalAddress, UkAddress }
 import uk.gov.hmrc.gform.sharedmodel.form.{ Validated => _, _ }
 import uk.gov.hmrc.gform.sharedmodel.formtemplate._
-import uk.gov.hmrc.gform.sharedmodel.{ CannotRetrieveResponse, NotFound, ServiceResponse }
+import uk.gov.hmrc.gform.sharedmodel.{ CannotRetrieveResponse, LangADT, NotFound, ServiceResponse }
 import uk.gov.hmrc.gform.validation.ValidationUtil.{ ValidatedType, _ }
 import uk.gov.hmrc.http.HeaderCarrier
 
@@ -50,7 +50,10 @@ class ValidationService(
     envelopeId: EnvelopeId,
     retrievals: MaterialisedRetrievals,
     thirdPartyData: ThirdPartyData,
-    formTemplate: FormTemplate)(implicit hc: HeaderCarrier, messages: Messages): Future[ValidatedType[Unit]] =
+    formTemplate: FormTemplate)(
+    implicit hc: HeaderCarrier,
+    messages: Messages,
+    l: LangADT): Future[ValidatedType[Unit]] =
     new ComponentsValidator(
       data,
       fileUploadService,
@@ -70,7 +73,10 @@ class ValidationService(
     envelopeId: EnvelopeId,
     retrievals: MaterialisedRetrievals,
     thirdPartyData: ThirdPartyData,
-    formTemplate: FormTemplate)(implicit hc: HeaderCarrier, messages: Messages): Future[ValidatedType[Unit]] =
+    formTemplate: FormTemplate)(
+    implicit hc: HeaderCarrier,
+    messages: Messages,
+    l: LangADT): Future[ValidatedType[Unit]] =
     fieldValues
       .traverse(fv =>
         validateFieldValue(fv, fieldValues, data, seed, envelopeId, retrievals, thirdPartyData, formTemplate))
@@ -95,13 +101,15 @@ class ValidationService(
     formTemplate: FormTemplate,
     data: FormDataRecalculated)(
     implicit hc: HeaderCarrier,
-    messages: Messages): Future[ValidatedType[ValidationResult]] = {
+    messages: Messages,
+    l: LangADT): Future[ValidatedType[ValidationResult]] = {
+    def lift[T](fv: Future[ValidatedType[T]]) = EitherT(fv.map(_.toEither))
+
     val eT = for {
-      _ <- EitherT(
-            validateComponents(sectionFields, data, seed, envelopeId, retrievals, thirdPartyData, formTemplate).map(
-              _.toEither))
-      valRes <- EitherT(validateUsingValidators(section, data).map(_.toEither))
+      _      <- lift(validateComponents(sectionFields, data, seed, envelopeId, retrievals, thirdPartyData, formTemplate))
+      valRes <- lift(validateUsingValidators(section, data))
     } yield valRes
+
     eT.value.map(Validated.fromEither)
   }
 

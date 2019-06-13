@@ -21,27 +21,30 @@
 @import uk.gov.hmrc.gform.sharedmodel.formtemplate._
 @import uk.gov.hmrc.gform.views.html._
 @import uk.gov.hmrc.gform.views.hardcoded.pages._
+@import uk.gov.hmrc.gform.sharedmodel.LangADT
 
 @(
-  formTemplate: FormTemplate,
-  accessCode: AgentAccessCode,
-  lang: Option[String],
-  frontendAppConfig: FrontendAppConfig
+        formTemplate: FormTemplate,
+        accessCode: AgentAccessCode,
+        frontendAppConfig: FrontendAppConfig
 )(
   implicit
   request: Request[_],
-  messages: Messages
+  messages: Messages,
+  l:LangADT
 )
 @formCat = @{messages(s"formCategory.${formCategory(formTemplate)}")}
 @heading = @{messages("accessCode.new.title")}
 
 @uk.gov.hmrc.gform.views.html.main_template(
   title = heading,
-  serviceName = formTemplate.formName,
+  serviceName = formTemplate.formName.value,
   developmentPhase = formTemplate.developmentPhase.getOrElse(ResearchBanner),
   frontendAppConfig = frontendAppConfig,
   authConfig = Some(formTemplate.authConfig),
-  formCategory = formTemplate.formCategory
+  formCategory = formTemplate.formCategory,
+  languages = formTemplate.languages,
+  templateId = formTemplate._id
 ) {
 
   <div class = "transaction-banner--complete">
@@ -74,7 +77,7 @@
     @messages("accessCode.new.willExpire", formCat).
   </p>
 
-  <form action="@{uk.gov.hmrc.gform.gform.routes.FormController.newFormPost(formTemplate._id, lang)}" method="POST">
+  <form action="@{uk.gov.hmrc.gform.gform.routes.FormController.newFormPost(formTemplate._id)}" method="POST">
     @{CSRF.formField}
     <input type="hidden" name="@{AgentAccessCode.key}" value="@{accessCode.value}">
     <input type="hidden" name="@{AgentAccessCode.optionKey}" value="@{AgentAccessCode.optionAccess}">

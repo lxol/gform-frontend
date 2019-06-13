@@ -17,14 +17,15 @@
 package uk.gov.hmrc.gform.validation
 
 import java.time.LocalDate
-import cats.implicits._
 
+import cats.implicits._
 import cats.Monoid
 import cats.data.Validated
 import cats.data.Validated.{ Invalid, Valid }
 import play.api.Logger
 import uk.gov.hmrc.gform.fileupload.{ Envelope, Error, File, Other, Quarantined }
 import uk.gov.hmrc.gform.models._
+import uk.gov.hmrc.gform.sharedmodel.LangADT
 import uk.gov.hmrc.gform.sharedmodel.form.{ FormDataRecalculated, ValidationResult }
 import uk.gov.hmrc.gform.sharedmodel.formtemplate._
 
@@ -79,8 +80,8 @@ object ValidationUtil {
             case None         => (fieldId, FieldOk(fieldValue, dGetter(fieldId).headOption.getOrElse("")))
           }
         }
-      case Choice(_, _, _, _, _) | FileUpload() | Group(_, _, _, _, _, _) | InformationMessage(_, _) |
-          Text(_, _, _, _) | TextArea(_, _, _) | HmrcTaxPeriod(_, _, _) =>
+      case Choice(_, _, _, _, _) | RevealingChoice(_) | FileUpload() | Group(_, _, _, _, _, _) |
+          InformationMessage(_, _) | Text(_, _, _, _) | TextArea(_, _, _) | HmrcTaxPeriod(_, _, _) =>
         List.empty[(FormComponentId, FormFieldValidationResult)]
     }
 
@@ -105,99 +106,108 @@ object ValidationUtil {
       case Invalid(errors) => errors
       case Valid(_)        => Map.empty[FormComponentId, Set[String]]
     }
+    def matchComponentType(fieldValue: FormComponent): FormFieldValidationResult = fieldValue.`type` match {
+      case sortCode @ UkSortCode(_) =>
+        val valSuffixResult: List[(FormComponentId, FormFieldValidationResult)] =
+          evaluateWithSuffix(fieldValue, gFormErrors)(dataGetter)
+        val valWithoutSuffixResult: (FormComponentId, FormFieldValidationResult) =
+          evaluateWithoutSuffix(fieldValue, gFormErrors)(dataGetter)
 
-    val resultErrors: List[FormFieldValidationResult] = atomicFields.map { fieldValue =>
-      fieldValue.`type` match {
-        case sortCode @ UkSortCode(_) =>
-          val valSuffixResult: List[(FormComponentId, FormFieldValidationResult)] =
-            evaluateWithSuffix(fieldValue, gFormErrors)(dataGetter)
-          val valWithoutSuffixResult: (FormComponentId, FormFieldValidationResult) =
-            evaluateWithoutSuffix(fieldValue, gFormErrors)(dataGetter)
+        val dataMap = (valWithoutSuffixResult :: valSuffixResult).map { kv =>
+          kv._1.value -> kv._2
+        }.toMap
 
-          val dataMap = (valWithoutSuffixResult :: valSuffixResult).map { kv =>
-            kv._1.value -> kv._2
-          }.toMap
+        ComponentField(fieldValue, dataMap)
+      case address @ Address(_) =>
+        val valSuffixResult: List[(FormComponentId, FormFieldValidationResult)] =
+          evaluateWithSuffix(fieldValue, gFormErrors)(dataGetter)
+        val valWithoutSuffixResult: (FormComponentId, FormFieldValidationResult) =
+          evaluateWithoutSuffix(fieldValue, gFormErrors)(dataGetter)
 
-          ComponentField(fieldValue, dataMap)
-        case address @ Address(_) =>
-          val valSuffixResult: List[(FormComponentId, FormFieldValidationResult)] =
-            evaluateWithSuffix(fieldValue, gFormErrors)(dataGetter)
-          val valWithoutSuffixResult: (FormComponentId, FormFieldValidationResult) =
-            evaluateWithoutSuffix(fieldValue, gFormErrors)(dataGetter)
+        val dataMap = (valWithoutSuffixResult :: valSuffixResult).map { kv =>
+          kv._1.value -> kv._2
+        }.toMap
 
-          val dataMap = (valWithoutSuffixResult :: valSuffixResult).map { kv =>
-            kv._1.value -> kv._2
-          }.toMap
+        ComponentField(fieldValue, dataMap)
 
-          ComponentField(fieldValue, dataMap)
+      case date @ Date(_, _, _) =>
+        val valSuffixResult: List[(FormComponentId, FormFieldValidationResult)] =
+          evaluateWithSuffix(fieldValue, gFormErrors)(dataGetter)
 
-        case date @ Date(_, _, _) =>
-          val valSuffixResult: List[(FormComponentId, FormFieldValidationResult)] =
-            evaluateWithSuffix(fieldValue, gFormErrors)(dataGetter)
+        val valWithoutSuffixResult: (FormComponentId, FormFieldValidationResult) =
+          evaluateWithoutSuffix(fieldValue, gFormErrors)(dataGetter)
 
-          val valWithoutSuffixResult: (FormComponentId, FormFieldValidationResult) =
-            evaluateWithoutSuffix(fieldValue, gFormErrors)(dataGetter)
+        val dataMap = (valWithoutSuffixResult :: valSuffixResult).map { kv =>
+          kv._1.value -> kv._2
+        }.toMap
 
-          val dataMap = (valWithoutSuffixResult :: valSuffixResult).map { kv =>
-            kv._1.value -> kv._2
-          }.toMap
+        ComponentField(fieldValue, dataMap)
 
-          ComponentField(fieldValue, dataMap)
-
-        case IsTextOrTextArea(constraint) =>
-          val data = constraint match {
-            case UkVrn | CompanyRegistrationNumber | EORI =>
-              dataGetter(fieldValue.id).headOption.getOrElse("").replace(" ", "")
-            case _ => dataGetter(fieldValue.id).headOption.getOrElse("")
-          }
-          gFormErrors
-            .get(fieldValue.id)
-            .fold[FormFieldValidationResult](
-              FieldOk(fieldValue, data)
-            )(errors => FieldError(fieldValue, dataGetter(fieldValue.id).headOption.getOrElse(""), errors))
-        case Group(_, _, _, _, _, _) => {
-          FieldOk(fieldValue, "") //nothing to validate for group (TODO - review)
+      case IsTextOrTextArea(constraint) =>
+        val data = constraint match {
+          case UkVrn | CompanyRegistrationNumber | EORI =>
+            dataGetter(fieldValue.id).headOption.getOrElse("").replace(" ", "")
+          case _ => dataGetter(fieldValue.id).headOption.getOrElse("")
         }
-
-        case Choice(_, _, _, _, _) =>
-          gFormErrors.get(fieldValue.id) match {
-            case Some(errors) =>
-              FieldError(fieldValue, dataGetter(fieldValue.id).headOption.getOrElse(""), errors) // ""
-            case None =>
-              val optionalData = data.data.get(fieldValue.id).map { selectedValue =>
-                selectedValue.map { index =>
-                  fieldValue.id.value + index -> FieldOk(fieldValue, dataGetter(fieldValue.id).headOption.getOrElse(""))
-                }.toMap
-
-              }
-
-              ComponentField(fieldValue, optionalData.getOrElse(Map.empty))
-          }
-        case FileUpload() => {
-          val fileName =
-            envelope.files.find(_.fileId.value == fieldValue.id.value).map(_.fileName).getOrElse("Upload document")
-          gFormErrors.get(fieldValue.id) match {
-            case Some(errors) => FieldError(fieldValue, fileName, errors)
-            case None         => FieldOk(fieldValue, fileName)
-          }
-        }
-        case InformationMessage(_, infoText) => FieldOk(fieldValue, "")
-        case HmrcTaxPeriod(_, _, _) =>
-          gFormErrors.get(fieldValue.id) match {
-            case Some(errors) =>
-              FieldError(fieldValue, dataGetter(fieldValue.id).headOption.getOrElse(""), errors)
-            case None =>
-              val optionalData = data.data.get(fieldValue.id).map { selectedValue =>
-                selectedValue.map { index =>
-                  fieldValue.id.value -> FieldOk(fieldValue, dataGetter(fieldValue.id).headOption.getOrElse(""))
-                }.toMap
-
-              }
-
-              ComponentField(fieldValue, optionalData.getOrElse(Map.empty))
-          }
+        gFormErrors
+          .get(fieldValue.id)
+          .fold[FormFieldValidationResult](
+            FieldOk(fieldValue, data)
+          )(errors => FieldError(fieldValue, dataGetter(fieldValue.id).headOption.getOrElse(""), errors))
+      case Group(_, _, _, _, _, _) => {
+        FieldOk(fieldValue, "") //nothing to validate for group (TODO - review)
       }
 
+      case Choice(_, _, _, _, _) =>
+        gFormErrors.get(fieldValue.id) match {
+          case Some(errors) =>
+            FieldError(fieldValue, dataGetter(fieldValue.id).headOption.getOrElse(""), errors)
+          case None =>
+            val optionalData = data.data.get(fieldValue.id).map { selectedValue =>
+              selectedValue.map { index =>
+                fieldValue.id.value + index -> FieldOk(fieldValue, dataGetter(fieldValue.id).headOption.getOrElse(""))
+              }.toMap
+            }
+            ComponentField(fieldValue, optionalData.getOrElse(Map.empty))
+        }
+      case RevealingChoice(_) =>
+        gFormErrors.get(fieldValue.id) match {
+          case Some(errors) =>
+            FieldError(fieldValue, dataGetter(fieldValue.id).headOption.getOrElse(""), errors)
+          case None =>
+            val optionalData = data.data.get(fieldValue.id).map { selectedValue =>
+              selectedValue.map { _ =>
+                fieldValue.id.value -> FieldOk(fieldValue, dataGetter(fieldValue.id).headOption.getOrElse(""))
+              }.toMap
+            }
+            ComponentField(fieldValue, optionalData.getOrElse(Map.empty))
+        }
+      case FileUpload() => {
+        val fileName =
+          envelope.files.find(_.fileId.value == fieldValue.id.value).map(_.fileName).getOrElse("Upload document")
+        gFormErrors.get(fieldValue.id) match {
+          case Some(errors) => FieldError(fieldValue, fileName, errors)
+          case None         => FieldOk(fieldValue, fileName)
+        }
+      }
+      case InformationMessage(_, infoText) => FieldOk(fieldValue, "")
+      case HmrcTaxPeriod(_, _, _) =>
+        gFormErrors.get(fieldValue.id) match {
+          case Some(errors) =>
+            FieldError(fieldValue, dataGetter(fieldValue.id).headOption.getOrElse(""), errors)
+          case None =>
+            val optionalData = data.data.get(fieldValue.id).map { selectedValue =>
+              selectedValue.map { index =>
+                fieldValue.id.value -> FieldOk(fieldValue, dataGetter(fieldValue.id).headOption.getOrElse(""))
+              }.toMap
+
+            }
+            ComponentField(fieldValue, optionalData.getOrElse(Map.empty))
+        }
+    }
+
+    val resultErrors: List[FormFieldValidationResult] = atomicFields.map { fieldValue =>
+      matchComponentType(fieldValue)
     }
     resultErrors
   }
@@ -211,16 +221,15 @@ object ValidationUtil {
       }
   }
 
-  def validateFileUploadHasScannedFiles(
-    fieldValues: List[FormComponent],
-    e: Envelope): Validated[GformError, ValidationResult] = {
+  def validateFileUploadHasScannedFiles(fieldValues: List[FormComponent], e: Envelope)(
+    implicit l: LangADT): Validated[GformError, ValidationResult] = {
     val fileUploads: Map[FormComponentId, FormComponent] = fieldValues.collect {
       case fv @ FormComponent(id, _: FileUpload, _, _, _, _, _, _, _, _, _, _, _) => id -> fv
     }.toMap
 
     //TODO: below code was borrowed from components validator. make it reusable in ValidationUtil
     def errors(fieldValue: FormComponent, defaultErr: String): Set[String] =
-      Set(fieldValue.errorMessage.getOrElse(defaultErr))
+      Set(fieldValue.errorMessage.map(localisedString => localisedString.value).getOrElse(defaultErr))
     def getError(
       fieldValue: FormComponent,
       defaultMessage: String): Validated[Map[FormComponentId, Set[String]], Nothing] =

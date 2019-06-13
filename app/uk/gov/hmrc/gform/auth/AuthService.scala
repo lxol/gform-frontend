@@ -21,6 +21,7 @@ import java.util.Base64
 import cats.implicits._
 import play.api.Logger
 import play.api.libs.json.{ JsDefined, JsString, Json }
+
 import scala.util.{ Failure, Success, Try }
 import uk.gov.hmrc.auth.core.authorise._
 import uk.gov.hmrc.auth.core.{ AffinityGroup, AuthConnector => _, _ }
@@ -28,6 +29,7 @@ import uk.gov.hmrc.gform.auth.models._
 import uk.gov.hmrc.gform.config.AppConfig
 import uk.gov.hmrc.gform.gform
 import uk.gov.hmrc.gform.gform.{ AuthContextPrepop, EeittService }
+import uk.gov.hmrc.gform.sharedmodel.LangADT
 import uk.gov.hmrc.gform.sharedmodel.form.EnvelopeId
 import uk.gov.hmrc.gform.sharedmodel.formtemplate.{ Enrolment => _, _ }
 import uk.gov.hmrc.gform.submission.SubmissionRef
@@ -45,32 +47,32 @@ class AuthService(
 
   def authenticateAndAuthorise(
     formTemplate: FormTemplate,
-    lang: Option[String],
     requestUri: String,
     getAffinityGroup: Unit => Future[Option[AffinityGroup]],
     ggAuthorised: PartialFunction[Throwable, AuthResult] => Predicate => Future[AuthResult]
   )(
-    implicit hc: HeaderCarrier
+    implicit hc: HeaderCarrier,
+    l: LangADT
   ): Future[AuthResult] =
     formTemplate.authConfig match {
       case Anonymous =>
         hc.sessionId
-          .fold[AuthResult](AuthAnonymousSession(gform.routes.FormController.dashboard(formTemplate._id, lang)))(
-            sessionId => AuthSuccessful(AnonymousRetrievals(sessionId)))
+          .fold[AuthResult](AuthAnonymousSession(gform.routes.FormController.dashboard(formTemplate._id)))(sessionId =>
+            AuthSuccessful(AnonymousRetrievals(sessionId)))
           .pure[Future]
       case AWSALBAuth            => performAWSALBAuth().pure[Future]
       case EeittModule(regimeId) => performEEITTAuth(regimeId, requestUri, ggAuthorised(RecoverAuthResult.noop))
       case HmrcSimpleModule      => performGGAuth(ggAuthorised(RecoverAuthResult.noop))
       case HmrcEnrolmentModule(enrolmentAuth) =>
-        performEnrolment(formTemplate, lang, enrolmentAuth, getAffinityGroup, ggAuthorised)
+        performEnrolment(formTemplate, enrolmentAuth, getAffinityGroup, ggAuthorised)
       case HmrcAgentModule(agentAccess) =>
-        performAgent(agentAccess, formTemplate, lang, ggAuthorised(RecoverAuthResult.noop), Future.successful(_))
+        performAgent(agentAccess, formTemplate, ggAuthorised(RecoverAuthResult.noop), Future.successful(_))
       case HmrcAgentWithEnrolmentModule(agentAccess, enrolmentAuth) =>
         def ifSuccessPerformEnrolment(authResult: AuthResult) = authResult match {
-          case AuthSuccessful(_) => performEnrolment(formTemplate, lang, enrolmentAuth, getAffinityGroup, ggAuthorised)
+          case AuthSuccessful(_) => performEnrolment(formTemplate, enrolmentAuth, getAffinityGroup, ggAuthorised)
           case authUnsuccessful  => Future.successful(authUnsuccessful)
         }
-        performAgent(agentAccess, formTemplate, lang, ggAuthorised(RecoverAuthResult.noop), ifSuccessPerformEnrolment)
+        performAgent(agentAccess, formTemplate, ggAuthorised(RecoverAuthResult.noop), ifSuccessPerformEnrolment)
     }
 
   private val notAuthorized: AuthResult = AuthBlocked("You are not authorized to access this service")
@@ -103,7 +105,6 @@ class AuthService(
 
   private def performEnrolment(
     formTemplate: FormTemplate,
-    lang: Option[String],
     enrolmentAuth: EnrolmentAuth,
     getAffinityGroup: Unit => Future[Option[AffinityGroup]],
     ggAuthorised: PartialFunction[Throwable, AuthResult] => Predicate => Future[AuthResult]
@@ -127,7 +128,7 @@ class AuthService(
           }
         }
 
-        val showEnrolment = AuthRedirect(gform.routes.EnrolmentController.showEnrolment(formTemplate._id, lang).url)
+        val showEnrolment = AuthRedirect(gform.routes.EnrolmentController.showEnrolment(formTemplate._id).url)
 
         val recoverPF = needEnrolment match {
           case RequireEnrolment(enrolmentSection, _) => RecoverAuthResult.redirectToEnrolmentSection(showEnrolment)
@@ -172,14 +173,13 @@ class AuthService(
   private def performAgent(
     agentAccess: AgentAccess,
     formTemplate: FormTemplate,
-    lang: Option[String],
     ggAuthorised: Predicate => Future[AuthResult],
-    continuation: AuthResult => Future[AuthResult])(implicit hc: HeaderCarrier): Future[AuthResult] =
+    continuation: AuthResult => Future[AuthResult])(implicit hc: HeaderCarrier, l: LangADT): Future[AuthResult] =
     performGGAuth(ggAuthorised)
       .map {
         case ggSuccessfulAuth @ AuthSuccessful(AuthenticatedRetrievals(_, enrolments, affinityGroup, _, _, _, _, _))
             if affinityGroup.contains(AffinityGroup.Agent) =>
-          ggAgentAuthorise(agentAccess, formTemplate, enrolments, lang) match {
+          ggAgentAuthorise(agentAccess, formTemplate, enrolments) match {
             case HMRCAgentAuthorisationSuccessful                => ggSuccessfulAuth
             case HMRCAgentAuthorisationDenied                    => AuthBlocked("Agents cannot access this form")
             case HMRCAgentAuthorisationFailed(agentSubscribeUrl) => AuthRedirect(agentSubscribeUrl)
@@ -204,11 +204,8 @@ class AuthService(
         case otherAuthResults => otherAuthResults.pure[Future]
       }
 
-  private def ggAgentAuthorise(
-    agentAccess: AgentAccess,
-    formTemplate: FormTemplate,
-    enrolments: Enrolments,
-    lang: Option[String]): HMRCAgentAuthorisation =
+  private def ggAgentAuthorise(agentAccess: AgentAccess, formTemplate: FormTemplate, enrolments: Enrolments)(
+    implicit l: LangADT): HMRCAgentAuthorisation =
     agentAccess match {
       case RequireMTDAgentEnrolment if enrolments.getEnrolment("HMRC-AS-AGENT").isDefined =>
         HMRCAgentAuthorisationSuccessful
@@ -216,7 +213,7 @@ class AuthService(
       case AllowAnyAgentAffinityUser => HMRCAgentAuthorisationSuccessful
       case _ =>
         HMRCAgentAuthorisationFailed(
-          routes.AgentEnrolmentController.prologue(formTemplate._id, formTemplate.formName, lang).url)
+          routes.AgentEnrolmentController.prologue(formTemplate._id, formTemplate.formName.value).url)
     }
 
   def eeitReferenceNumber(retrievals: MaterialisedRetrievals): String =

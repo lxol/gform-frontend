@@ -20,6 +20,7 @@ import uk.gov.hmrc.gform.commons.BigDecimalUtil.toBigDecimalDefault
 import uk.gov.hmrc.gform.graph.Data
 import uk.gov.hmrc.gform.models.ExpandUtils._
 import uk.gov.hmrc.gform.models.helpers.RepeatFormComponentIds
+import uk.gov.hmrc.gform.sharedmodel.{ LangADT, LocalisedString }
 import uk.gov.hmrc.gform.sharedmodel.form.FormDataRecalculated
 import uk.gov.hmrc.gform.sharedmodel.formtemplate._
 
@@ -31,7 +32,7 @@ object RepeatingComponentService {
     RepeatFormComponentIds(fcId => fcs.filter(_.id.value.endsWith(fcId.value)).map(_.id))
 
   def sumFunctionality(field: FormCtx, formTemplate: FormTemplate, data: FormDataRecalculated): BigDecimal = {
-    val repeatFormComponentIds = getRepeatFormComponentIds(formTemplate.expandFormTemplate(data.data).allFCs)
+    val repeatFormComponentIds = getRepeatFormComponentIds(formTemplate.expandFormTemplate(data.data).allFormComponents)
     val fcIds: List[FormComponentId] = repeatFormComponentIds.op(FormComponentId(field.value))
     fcIds.map(id => data.data.get(id).flatMap(_.headOption).fold(0: BigDecimal)(toBigDecimalDefault)).sum
   }
@@ -71,27 +72,34 @@ object RepeatingComponentService {
   }
 
   private def copySection(section: Section, index: Int, data: FormDataRecalculated) = {
-    def copyField(field: FormComponent): FormComponent =
-      field.`type` match {
+    def copyField(field: FormComponent): FormComponent = {
+      val tpe = field.`type` match {
+        case rc @ RevealingChoice(options) =>
+          val optionsUpd = options.map(rce => rce.copy(revealingFields = rce.revealingFields.map(copyField)))
+          rc.copy(options = optionsUpd)
         case grp @ Group(fields, _, _, _, _, _) =>
-          field.copy(
-            id = FormComponentId(s"${index}_${field.id.value}"),
-            `type` = grp.copy(fields = fields.map(copyField))
-          )
-        case _ =>
-          field.copy(
-            id = FormComponentId(s"${index}_${field.id.value}")
-          )
+          grp.copy(fields = fields.map(copyField))
+        case t => t
       }
+      field.copy(
+        id = FormComponentId(s"${index}_${field.id.value}"),
+        `type` = tpe
+      )
+    }
 
     section.copy(
-      title = buildText(Some(section.title), index, data).getOrElse(""),
-      shortName = buildText(section.shortName, index, data),
+      title = buildText(section.title, index, data),
+      shortName = optBuildText(section.shortName, index, data),
       fields = section.fields.map(copyField)
     )
   }
 
-  private def buildText(template: Option[String], index: Int, data: FormDataRecalculated): Option[String] = {
+  private def optBuildText(
+    maybeLs: Option[LocalisedString],
+    index: Int,
+    data: FormDataRecalculated): Option[LocalisedString] = maybeLs.map(ls => buildText(ls, index, data))
+
+  private def buildText(ls: LocalisedString, index: Int, data: FormDataRecalculated): LocalisedString = {
 
     def evaluateTextExpression(str: String) = {
       val field = str.replaceFirst("""\$\{""", "").replaceFirst("""\}""", "")
@@ -118,10 +126,9 @@ object RepeatingComponentService {
       str.replace(expression, evaluatedText)
     }
 
-    template match {
-      case Some(inputText) => Some(getEvaluatedText(inputText).replace("$n", index.toString))
-      case _               => None
-    }
+    ls.copy(m = ls.m.map {
+      case (lang, message) => (lang, getEvaluatedText(message).replace("$n", index.toString))
+    })
   }
 
   //This Evaluation is for the repeating sections, this will not become values.
@@ -210,13 +217,13 @@ object RepeatingComponentService {
         }
 
     section match {
-      case s: Section => s.expandSection(data).expandedFCs.flatMap(_.expandedFC)
+      case s: Section => s.expandSection(data).expandedFormComponents.flatMap(_.formComponents)
       case _          => loop(section.fields)
     }
   }
 
   def atomicFieldsFull(section: Section): List[FormComponent] =
-    section.expandSectionFull.expandedFCs.flatMap(_.expandedFC)
+    section.expandSectionFull.expandedFormComponents.flatMap(_.formComponents)
 
   def atomicFieldsFullWithCtx(section: Section): List[FormComponentWithCtx] =
     section.expandSectionFullWithCtx

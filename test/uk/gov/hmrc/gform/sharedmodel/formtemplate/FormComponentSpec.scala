@@ -18,7 +18,9 @@ package uk.gov.hmrc.gform.sharedmodel.formtemplate
 
 import cats.data.NonEmptyList
 import org.scalactic.source.Position
+import uk.gov.hmrc.gform.Helpers.toLocalisedString
 import uk.gov.hmrc.gform.Spec
+import uk.gov.hmrc.gform.sharedmodel.{ LangADT, LocalisedString }
 import uk.gov.hmrc.gform.sharedmodel.formtemplate.generators.FormComponentGen
 
 class FormComponentSpec extends Spec {
@@ -27,8 +29,9 @@ class FormComponentSpec extends Spec {
   private val exprAddress = Address(international = false)
   private val exprUKSortCode = UkSortCode(Value)
   private val exprDate = Date(AnyDate, Offset(0), None)
-  private val exprChoice = Choice(Checkbox, NonEmptyList("Natural gas", Nil), Vertical, List.empty[Int], None)
-  private val exprInformationMessage = InformationMessage(StandardInfo, "Info text")
+  private val exprChoice =
+    Choice(Checkbox, NonEmptyList(toLocalisedString("Natural gas"), Nil), Vertical, List.empty[Int], None)
+  private val exprInformationMessage = InformationMessage(StandardInfo, toLocalisedString("Info text"))
   private val exprFileUpload = FileUpload()
 
   private val labelNoCounter = "Label no counter"
@@ -68,7 +71,7 @@ class FormComponentSpec extends Spec {
         "Short name for $n."
       )
 
-    val result = fc.expandFormComponentFull.expandedFC
+    val result = fc.expandFormComponentFull.formComponents
 
     val expected = List(
       mkFormComponent("text-id", exprText, "1. Some label", "Short name for 1."),
@@ -120,7 +123,7 @@ class FormComponentSpec extends Spec {
       "Group label",
       "Group short name"
     )
-    val result = fc.expandFormComponentFull.expandedFC
+    val result = fc.expandFormComponentFull.formComponents
 
     val expected = List(
       mkFormComponent("text-id", exprText, "1. Some label", "Short name for 1."),
@@ -153,69 +156,18 @@ class FormComponentSpec extends Spec {
     result should be(expected)
   }
 
-  it should "expand Group within a Group" in {
-    val maxOuter = 2
-    val maxInner = 3
-    val fc = mkFormComponent(
-      "group-id",
-      Group(
-        List(
-          mkFormComponent("text-id-outer", exprText, "$n. Some outer label", "Short name outer for $n."),
-          mkFormComponent(
-            "group-id",
-            Group(
-              List(
-                mkFormComponent("text-id-inner", exprText, "$n. Some inner label", "Short name inner for $n.")
-              ),
-              Vertical,
-              Some(maxInner),
-              None,
-              None,
-              None
-            ),
-            "Group label inner",
-            "Group short name inner"
-          )
-        ),
-        Vertical,
-        Some(maxOuter),
-        None,
-        None,
-        None
-      ),
-      "Group label outer",
-      "Group short name outer"
-    )
-
-    val result = fc.expandFormComponentFull.expandedFC
-
-    // This is not correct, but we can take it from here if ever Group in Group functionality would be required
-    val expected = List(
-      mkFormComponent("text-id-outer", exprText, "1. Some outer label", "Short name outer for 1."),
-      mkFormComponent("text-id-inner", exprText, "1. Some inner label", "Short name inner for 1."),
-      mkFormComponent("1_text-id-inner", exprText, "2. Some inner label", "Short name inner for 2."),
-      mkFormComponent("2_text-id-inner", exprText, "3. Some inner label", "Short name inner for 3."),
-      mkFormComponent("1_text-id-outer", exprText, "2. Some outer label", "Short name outer for 2."),
-      mkFormComponent("text-id-inner", exprText, "1. Some inner label", "Short name inner for 1."),
-      mkFormComponent("1_text-id-inner", exprText, "2. Some inner label", "Short name inner for 2."),
-      mkFormComponent("2_text-id-inner", exprText, "3. Some inner label", "Short name inner for 3.")
-    )
-    result.size should be(8)
-    result should be(expected)
-  }
-
   private def notExpand(ct: ComponentType)(implicit position: Position) = {
     val fc = mkFormComponent("some-component", ct, "$n. Some label", "Short name for $n.")
-    fc.expandFormComponentFull.expandedFC should be(fc :: Nil)
+    fc.expandFormComponentFull.formComponents should be(fc :: Nil)
   }
 
   private def mkFormComponent(fcId: String, ct: ComponentType, label: String, shortName: String) =
     FormComponent(
       FormComponentId(fcId),
       ct,
-      label,
+      toLocalisedString(label),
       None,
-      Some(shortName),
+      Some(toLocalisedString(shortName)),
       None,
       true,
       false,

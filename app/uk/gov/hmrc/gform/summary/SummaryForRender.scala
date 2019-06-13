@@ -26,7 +26,7 @@ import uk.gov.hmrc.gform.fileupload.Envelope
 import uk.gov.hmrc.gform.keystore.RepeatingComponentService
 import uk.gov.hmrc.gform.models.ExpandUtils._
 import uk.gov.hmrc.gform.models.helpers.{ Fields, TaxPeriodHelper }
-import uk.gov.hmrc.gform.sharedmodel.{ AccessCode, Obligations }
+import uk.gov.hmrc.gform.sharedmodel.{ AccessCode, LangADT, Obligations }
 import uk.gov.hmrc.gform.sharedmodel.form.{ FormDataRecalculated, ValidationResult }
 import uk.gov.hmrc.gform.sharedmodel.formtemplate.SectionTitle4Ga.sectionTitle4GaFactory
 import uk.gov.hmrc.gform.sharedmodel.formtemplate._
@@ -43,24 +43,23 @@ object SummaryRenderingService {
     formFields: FormDataRecalculated,
     maybeAccessCode: Option[AccessCode],
     envelope: Envelope,
-    lang: Option[String],
     retrievals: MaterialisedRetrievals,
     frontendAppConfig: FrontendAppConfig,
     obligations: Obligations
   )(
     implicit
     request: Request[_],
-    messages: Messages): Html = {
+    messages: Messages,
+    l: LangADT): Html = {
     val sfr =
-      summaryForRender(validatedType, formFields, maybeAccessCode, formTemplate, envelope, lang, obligations)
+      summaryForRender(validatedType, formFields, maybeAccessCode, formTemplate, envelope, obligations)
     summary(
       formTemplate,
       sfr,
       maybeAccessCode,
       formTemplate.formCategory,
-      lang,
       retrievals.renderSaveAndComeBackLater,
-      retrievals.continueLabel,
+      retrievals.continueLabelKey,
       frontendAppConfig
     )
   }
@@ -71,11 +70,10 @@ object SummaryRenderingService {
     maybeAccessCode: Option[AccessCode],
     formTemplate: FormTemplate,
     envelope: Envelope,
-    lang: Option[String],
     obligations: Obligations
-  )(implicit messages: Messages): List[Html] = {
+  )(implicit messages: Messages, l: LangADT): List[Html] = {
 
-    def renderHtmls(sections: List[Section], fields: List[FormComponent]): List[Html] = {
+    def renderHtmls(sections: List[Section], fields: List[FormComponent])(implicit l: LangADT): List[Html] = {
       def validate(formComponent: FormComponent): Option[FormFieldValidationResult] = {
         val gformErrors = validatedType match {
           case Invalid(errors) => errors
@@ -90,8 +88,7 @@ object SummaryRenderingService {
         maybeAccessCode: Option[AccessCode],
         title: String,
         sectionNumber: SectionNumber,
-        sectionTitle4Ga: SectionTitle4Ga,
-        lang: Option[String]): Html = {
+        sectionTitle4Ga: SectionTitle4Ga): Html = {
 
         val changeButton = change_button(
           formTemplateId,
@@ -99,12 +96,12 @@ object SummaryRenderingService {
           title,
           sectionNumber,
           sectionTitle4Ga,
-          lang,
           fieldValue
         )
 
-        def groupToHtml(fieldValue: FormComponent, presentationHint: List[PresentationHint]): Html = {
-          val isLabel = fieldValue.shortName.getOrElse(fieldValue.label).nonEmpty
+        def groupToHtml(fieldValue: FormComponent, presentationHint: List[PresentationHint])(
+          implicit l: LangADT): Html = {
+          val isLabel = fieldValue.shortName.map(ls => ls.value).getOrElse(fieldValue.label.value).nonEmpty
 
           fieldValue.`type` match {
             case groupField: Group
@@ -127,7 +124,7 @@ object SummaryRenderingService {
               val fcs: List[FormComponent] =
                 getAllFieldsInGroup(fieldValue, groupField, data).filter(_.hasData(data)).flatMap(_.componentList)
 
-              val value = fcs.map(validate).filterNot(_ == None)
+              val value = fcs.map(validate).filterNot(_.isEmpty)
 
               if (value.nonEmpty) {
                 group_grid(fieldValue, value, isLabel, changeButton)
@@ -144,8 +141,7 @@ object SummaryRenderingService {
                   maybeAccessCode,
                   title,
                   sectionNumber,
-                  sectionTitle4Ga,
-                  lang
+                  sectionTitle4Ga
                 )
               })
               group(fieldValue, htmlList, orientation, isLabel)
@@ -157,8 +153,7 @@ object SummaryRenderingService {
                 maybeAccessCode,
                 title,
                 sectionNumber,
-                sectionTitle4Ga,
-                lang
+                sectionTitle4Ga
               )
           }
         }
@@ -169,25 +164,45 @@ object SummaryRenderingService {
           case Address(_)        => address(fieldValue, validate(fieldValue), changeButton)
           case Text(_, _, _, _)  => text(fieldValue, validate(fieldValue), changeButton)
           case TextArea(_, _, _) => textarea(fieldValue, validate(fieldValue), changeButton)
+
           case Choice(_, options, _, _, _) =>
             val selections = options.toList.zipWithIndex
               .map {
                 case (option, index) =>
                   validate(fieldValue)
                     .flatMap(_.getOptionalCurrentValue(fieldValue.id.value + index.toString))
-                    .map(_ => option)
+                    .map(_ => option.value)
               }
               .collect { case Some(selection) => selection }
 
             choice(fieldValue, selections, changeButton)
+
+          case rc @ RevealingChoice(os) =>
+            val selections: List[String] = os
+              .map(_.choice)
+              .zipWithIndex
+              .map {
+                case (option, index) =>
+                  validate(fieldValue)
+                    .flatMap(_.getOptionalCurrentValue(fieldValue.id.value + index.toString))
+                    .map(_ => option)
+              }
+              .collect { case Some(selection) => selection.value }
+
+            val hiddenFieldInfo = for {
+              field <- RevealingChoice.slice(fieldValue.id)(data.data)(rc)
+            } yield valueToHtml(field, formTemplateId, maybeAccessCode, title, sectionNumber, sectionTitle4Ga)
+
+            val listOfHtml = choice(fieldValue, selections, changeButton) :: hiddenFieldInfo
+            revealingChoice(listOfHtml)
+
           case f @ FileUpload()         => file_upload(fieldValue, f, validate(fieldValue), changeButton)
           case InformationMessage(_, _) => Html("")
           case Group(_, _, _, _, _, _)  => groupToHtml(fieldValue, fieldValue.presentationHint.getOrElse(Nil))
-          case h @ HmrcTaxPeriod(idType, _, _) =>
+
+          case h @ HmrcTaxPeriod(_, _, _) =>
             val periodId = TaxPeriodHelper.formatTaxPeriodOutput(validate(fieldValue))
-
             val maybeObligation = obligations.findByPeriodKey(h, periodId)
-
             hmrc_tax_period(fieldValue, validate(fieldValue), changeButton, maybeObligation)
         }
       }
@@ -204,8 +219,8 @@ object SummaryRenderingService {
       sectionsToRender
         .flatMap {
           case (section, index) =>
-            val sectionTitle4Ga = sectionTitle4GaFactory(sections(index).title)
-            val begin = begin_section(section.shortName.getOrElse(section.title))
+            val sectionTitle4Ga = sectionTitle4GaFactory(sections(index).title.value)
+            val begin = begin_section(section.shortName.getOrElse(section.title).value)
             val end = end_section()
 
             val middle =
@@ -216,10 +231,9 @@ object SummaryRenderingService {
                     _,
                     formTemplate._id,
                     maybeAccessCode,
-                    section.shortName.getOrElse(section.title),
+                    section.shortName.getOrElse(section.title).value,
                     SectionNumber(index),
-                    sectionTitle4Ga,
-                    lang))
+                    sectionTitle4Ga))
             begin +: middle :+ end
         }
 

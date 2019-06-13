@@ -20,26 +20,27 @@ import cats.data.NonEmptyList
 import julienrf.json.derived
 import play.api.libs.json._
 import uk.gov.hmrc.gform.graph.Data
-import uk.gov.hmrc.gform.sharedmodel.formtemplate
+import uk.gov.hmrc.gform.sharedmodel.{ AvailableLanguages, LocalisedString, formtemplate }
 import uk.gov.hmrc.gform.sharedmodel.formtemplate.destinations.{ DestinationTest, Destinations }
 import uk.gov.hmrc.gform.sharedmodel.formtemplate.destinations.Destinations.DmsSubmission
 
 case class ExpandedFormTemplate(expandedSection: List[ExpandedSection]) {
-  val allFCs: List[FormComponent] = expandedSection.flatMap(_.expandedFCs.flatMap(_.expandedFC))
-  val allFcIds: List[FormComponentId] = expandedSection.flatMap(_.expandedFCs.flatMap(_.allIds))
-  def fcsLookup(data: Data): Map[FormComponentId, FormComponent] =
-    allFCs.flatMap(fc => fc.expandFormComponent(data).allIds.map(_ -> fc)).toMap
-  def fcsLookupFull: Map[FormComponentId, FormComponent] =
-    allFCs.flatMap(fc => fc.expandFormComponentFull.allIds.map(_ -> fc)).toMap
+  val allFormComponents: List[FormComponent] =
+    expandedSection.flatMap(_.expandedFormComponents.flatMap(_.formComponents))
+  val allFormComponentIds: List[FormComponentId] = expandedSection.flatMap(_.expandedFormComponents.flatMap(_.allIds))
+  def formComponentsLookup(data: Data): Map[FormComponentId, FormComponent] =
+    allFormComponents.flatMap(fc => fc.expandFormComponent(data).allIds.map(_ -> fc)).toMap
+  def formComponentsLookupFull: Map[FormComponentId, FormComponent] =
+    allFormComponents.flatMap(fc => fc.expandFormComponentFull.allIds.map(_ -> fc)).toMap
   val allIncludeIfs: List[(List[ExpandedFormComponent], IncludeIf, Int)] = expandedSection.zipWithIndex.collect {
-    case (ExpandedSection(expandedFCs, Some(includeIf)), index) => (expandedFCs, includeIf, index)
+    case (ExpandedSection(expandedFormComponents, Some(includeIf)), index) => (expandedFormComponents, includeIf, index)
   }
 }
 
 case class FormTemplate(
   _id: FormTemplateId,
-  formName: String,
-  description: String,
+  formName: LocalisedString,
+  description: LocalisedString,
   developmentPhase: Option[DevelopmentPhase],
   formCategory: FormCategory,
   draftRetrievalMethod: Option[DraftRetrievalMethod],
@@ -55,9 +56,11 @@ case class FormTemplate(
   sections: List[Section],
   acknowledgementSection: AcknowledgementSection,
   declarationSection: DeclarationSection,
-  GFC579Ready: Option[String]
+  GFC579Ready: Option[String],
+  languages: AvailableLanguages
 ) {
   def expandFormTemplate(data: Data): ExpandedFormTemplate = ExpandedFormTemplate(sections.map(_.expandSection(data)))
+
   val expandFormTemplateFull: ExpandedFormTemplate = ExpandedFormTemplate(sections.map(_.expandSectionFull))
 }
 
@@ -67,8 +70,8 @@ object FormTemplate {
 
   private case class DeprecatedFormTemplateWithDmsSubmission(
     _id: FormTemplateId,
-    formName: String,
-    description: String,
+    formName: LocalisedString,
+    description: LocalisedString,
     developmentPhase: Option[DevelopmentPhase],
     formCategory: FormCategory,
     draftRetrievalMethod: Option[DraftRetrievalMethod],
@@ -83,12 +86,13 @@ object FormTemplate {
     sections: List[Section],
     acknowledgementSection: AcknowledgementSection,
     declarationSection: DeclarationSection,
-    GFC579Ready: Option[String]) {
+    GFC579Ready: Option[String],
+    languages: AvailableLanguages) {
     def toNewForm: FormTemplate =
       FormTemplate(
         _id: FormTemplateId,
-        formName: String,
-        description: String,
+        formName: LocalisedString,
+        description: LocalisedString,
         developmentPhase: Option[DevelopmentPhase],
         formCategory: FormCategory,
         draftRetrievalMethod: Option[DraftRetrievalMethod],
@@ -104,7 +108,8 @@ object FormTemplate {
         sections: List[Section],
         acknowledgementSection: AcknowledgementSection,
         declarationSection: DeclarationSection,
-        GFC579Ready: Option[String]
+        GFC579Ready: Option[String],
+        languages: AvailableLanguages
       )
   }
 
@@ -131,8 +136,8 @@ object FormTemplate {
 
   def withDeprecatedDmsSubmission(
     _id: FormTemplateId,
-    formName: String,
-    description: String,
+    formName: LocalisedString,
+    description: LocalisedString,
     developmentPhase: Option[DevelopmentPhase] = Some(ResearchBanner),
     formCategory: FormCategory,
     draftRetrievalMethod: Option[DraftRetrievalMethod] = Some(OnePerUser),
@@ -147,7 +152,8 @@ object FormTemplate {
     sections: List[Section],
     acknowledgementSection: AcknowledgementSection,
     declarationSection: DeclarationSection,
-    GFC579Ready: Option[String] = Some("false")): FormTemplate =
+    GFC579Ready: Option[String] = Some("false"),
+    languages: AvailableLanguages = AvailableLanguages.default): FormTemplate =
     DeprecatedFormTemplateWithDmsSubmission(
       _id,
       formName,
@@ -166,6 +172,7 @@ object FormTemplate {
       sections,
       acknowledgementSection,
       declarationSection,
-      GFC579Ready
+      GFC579Ready,
+      languages
     ).toNewForm
 }

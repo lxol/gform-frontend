@@ -20,29 +20,31 @@
 @import views.html.helper.CSRF
 @import uk.gov.hmrc.gform.config.FrontendAppConfig
 @import uk.gov.hmrc.gform.sharedmodel.formtemplate.ResearchBanner
+@import uk.gov.hmrc.gform.sharedmodel.LangADT
 
 @(
     formTemplate: FormTemplate,
     snippets: List[Html],
     maybeAccessCode: Option[AccessCode],
     formCategory: FormCategory,
-    lang: Option[String],
     renderComeBackLater: Boolean,
-    continueLabel: String,
+    continueLabelKey: String,
     frontendAppConfig: FrontendAppConfig
-)(implicit request: Request[_], messages: Messages)
+)(implicit request: Request[_], messages: Messages, l:LangADT)
 
 @heading = @{messages("summary.title")}
 
 @uk.gov.hmrc.gform.views.html.main_template(
   title = heading,
-  serviceName = formTemplate.formName,
+  serviceName = formTemplate.formName.value,
   developmentPhase = formTemplate.developmentPhase.getOrElse(ResearchBanner),
   bodyClasses = None,
   frontendAppConfig = frontendAppConfig,
   authConfig = Some(formTemplate.authConfig),
   webChat = formTemplate.webChat,
-  formCategory = formTemplate.formCategory
+  formCategory = formTemplate.formCategory,
+  languages = formTemplate.languages,
+  templateId = formTemplate._id
 ) {
 
     <div class="cya-intro">
@@ -54,7 +56,7 @@
       </p>
     </div>
 
-    <form action="@uk.gov.hmrc.gform.gform.routes.SummaryController.submit(formTemplate._id, maybeAccessCode, lang).url" method="POST" class="js-form" autocomplete="off" novalidate="novalidate" id="gf-form">
+    <form action="@uk.gov.hmrc.gform.gform.routes.SummaryController.submit(formTemplate._id, maybeAccessCode).url" method="POST" class="js-form" autocomplete="off" novalidate="novalidate" id="gf-form">
 
         @CSRF.formField
       	@snippets
@@ -67,7 +69,7 @@
             @messages("summary.printMsg", formCategory.getString).
           </p>
           <p>
-            <a href="@uk.gov.hmrc.gform.gform.routes.SummaryController.downloadPDF(formTemplate._id, maybeAccessCode, lang).url">@messages("summary.printLinkText")</a>
+            <a href="@uk.gov.hmrc.gform.gform.routes.SummaryController.downloadPDF(formTemplate._id, maybeAccessCode).url">@messages("summary.printLinkText")</a>
           </p>
         </div>
 
@@ -75,7 +77,7 @@
 
         <div class="print-hidden">
             <div class="form-group">
-                <button type="submit" class="button" value="Declaration">@messages("button.continue")</button>
+                <button type="submit" class="button" value="Declaration">@messages(continueLabelKey)</button>
             </div>
             <div class="js-visible">
               @if(renderComeBackLater) {

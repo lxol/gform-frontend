@@ -29,7 +29,7 @@ import cats.syntax.traverse._
 import cats.syntax.validated._
 import cats.{ Applicative, Monad, Traverse }
 import play.api.i18n.I18nSupport
-import play.api.mvc.{ AnyContent, Request, Result }
+import play.api.mvc.{ AnyContent, Request }
 import uk.gov.hmrc.gform.auth._
 import uk.gov.hmrc.gform.auth.models._
 import uk.gov.hmrc.gform.config.{ AppConfig, FrontendAppConfig }
@@ -38,10 +38,10 @@ import uk.gov.hmrc.gform.controllers.helpers.FormDataHelpers.{ get, processRespo
 import uk.gov.hmrc.gform.gform.processor.EnrolmentResultProcessor
 import uk.gov.hmrc.gform.graph.{ Convertible, Evaluator, NewValue, Recalculation }
 import uk.gov.hmrc.gform.models.helpers.Fields
-import uk.gov.hmrc.gform.sharedmodel.{ ServiceCallResponse, ServiceResponse }
 import uk.gov.hmrc.gform.sharedmodel.form.{ EnvelopeId, FormDataRecalculated, Seed, ThirdPartyData, ValidationResult }
 import uk.gov.hmrc.gform.sharedmodel.formtemplate._
 import uk.gov.hmrc.gform.sharedmodel.taxenrolments.TaxEnrolmentsResponse
+import uk.gov.hmrc.gform.sharedmodel.{ ServiceCallResponse, ServiceResponse }
 import uk.gov.hmrc.gform.validation.ValidationService
 import uk.gov.hmrc.gform.validation.ValidationUtil.{ GformError, ValidatedType }
 import uk.gov.hmrc.http.{ HeaderCarrier, HttpResponse }
@@ -100,8 +100,8 @@ class EnrolmentController(
 
   import i18nSupport._
 
-  def showEnrolment(formTemplateId: FormTemplateId, lang: Option[String]) = auth.asyncGGAuth(formTemplateId) {
-    implicit request => cache =>
+  def showEnrolment(formTemplateId: FormTemplateId) =
+    auth.asyncGGAuth(formTemplateId) { implicit request => implicit l => cache =>
       cache.formTemplate.authConfig match {
         case HasEnrolmentSection((_, enrolmentSection, _, _)) =>
           Ok(
@@ -113,18 +113,17 @@ class EnrolmentController(
                 FormDataRecalculated.empty,
                 Nil,
                 Nil,
-                ValidationResult.empty.valid,
-                lang)
+                ValidationResult.empty.valid)
           ).pure[Future]
         case _ =>
           Redirect(uk.gov.hmrc.gform.auth.routes.ErrorController.insufficientEnrolments())
-            .flashing("formTitle" -> cache.formTemplate.formName)
+            .flashing("formTitle" -> cache.formTemplate.formName.value)
             .pure[Future]
       }
-  }
+    }
 
-  def submitEnrolment(formTemplateId: FormTemplateId, lang: Option[String]) = auth.asyncGGAuth(formTemplateId) {
-    implicit request => cache =>
+  def submitEnrolment(formTemplateId: FormTemplateId) =
+    auth.asyncGGAuth(formTemplateId) { implicit request => implicit l => cache =>
       import cache._
       val checkEnrolment: ServiceId => NonEmptyList[Identifier] => EnrolM[CheckEnrolmentsResult] =
         serviceId => identifiers => EitherT.liftF(Kleisli(_ => auth.checkEnrolment(serviceId, identifiers)))
@@ -165,7 +164,6 @@ class EnrolmentController(
                   retrievals,
                   enrolmentSection,
                   data,
-                  lang,
                   frontendAppConfig)
                 res <- processValidation(
                         serviceId,
@@ -189,11 +187,11 @@ class EnrolmentController(
           case _ =>
             Future.successful(
               Redirect(uk.gov.hmrc.gform.auth.routes.ErrorController.insufficientEnrolments())
-                .flashing("formTitle" -> formTemplate.formName)
+                .flashing("formTitle" -> formTemplate.formName.value)
             )
         }
       }
-  }
+    }
 
   private def validateIdentifiers[F[_]: Applicative](
     identifiers: NonEmptyList[(IdentifierRecipe, Identifier)],

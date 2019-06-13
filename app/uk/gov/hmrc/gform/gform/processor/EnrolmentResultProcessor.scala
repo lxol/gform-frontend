@@ -28,6 +28,7 @@ import uk.gov.hmrc.gform.fileupload.Envelope
 import uk.gov.hmrc.gform.gform.{ EnrolmentFormNotValid, NoIdentifierProvided, SubmitEnrolmentError }
 import uk.gov.hmrc.gform.gform.RegimeIdNotMatch
 import uk.gov.hmrc.gform.models.helpers.Fields
+import uk.gov.hmrc.gform.sharedmodel.LangADT
 import uk.gov.hmrc.gform.sharedmodel.form.{ FormDataRecalculated, ValidationResult }
 import uk.gov.hmrc.gform.sharedmodel.formtemplate.{ EnrolmentSection, FormComponent, FormTemplate }
 import uk.gov.hmrc.gform.validation.{ FormFieldValidationResult, ValidationUtil }
@@ -40,7 +41,6 @@ class EnrolmentResultProcessor(
   retrievals: MaterialisedRetrievals,
   enrolmentSection: EnrolmentSection,
   data: FormDataRecalculated,
-  lang: Option[String],
   frontendAppConfig: FrontendAppConfig
 ) {
 
@@ -63,7 +63,6 @@ class EnrolmentResultProcessor(
 
   private def getResult(validationResult: ValidatedType[ValidationResult], globalErrors: List[Html]): Result = {
     val errorMap = getErrorMap(validationResult)
-
     Ok(
       renderEnrolmentSection(
         formTemplate,
@@ -72,8 +71,7 @@ class EnrolmentResultProcessor(
         data,
         errorMap,
         globalErrors,
-        validationResult,
-        lang
+        validationResult
       )
     )
   }
@@ -96,12 +94,12 @@ class EnrolmentResultProcessor(
   }
 
   def processEnrolmentResult(
-    authRes: CheckEnrolmentsResult)(implicit request: Request[AnyContent], messages: Messages): Result =
+    authRes: CheckEnrolmentsResult)(implicit request: Request[AnyContent], messages: Messages, l: LangADT): Result =
     authRes match {
       case EnrolmentConflict =>
         Ok(uk.gov.hmrc.gform.views.html.hardcoded.pages.error_enrolment_conflict(formTemplate, frontendAppConfig))
       case EnrolmentSuccessful =>
-        Redirect(uk.gov.hmrc.gform.gform.routes.FormController.dashboard(formTemplate._id, lang).url)
+        Redirect(uk.gov.hmrc.gform.gform.routes.FormController.dashboard(formTemplate._id).url)
       case EnrolmentFailed =>
         val globalError = html.form.errors.error_global("Enrolment unsuccessful, please check your data and try again.")
         val globalErrors = globalError :: Nil

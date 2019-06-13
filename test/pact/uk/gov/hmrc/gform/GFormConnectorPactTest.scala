@@ -97,22 +97,22 @@ class GFormConnectorPactTest extends SpecWithFakeApp with ScalaFutures {
   private val expectedForm =
     """
       |{
-      |  "formName": "name",
+      |  "formName": {"en":"name"},
       |  "formCategory": "default",
       |  "sections": [],
-      |  "description": "description",
+      |  "description": {"en":"description"},
       |  "_id": "333",
       |  "submitSuccessUrl": "",
       |  "authConfig": {
       |    "HmrcSimpleModule": {}
       |  },
       |  "declarationSection": {
-      |    "title": "Mr",
+      |    "title": {"en" : "Mr"},
       |    "fields": []
       |  },
       |  "submitErrorUrl": "business",
       |  "acknowledgementSection": {
-      |    "title": "Mr",
+      |    "title": {"en" : "Mr"},
       |    "fields": []
       |  },
       |  "destinations": {
@@ -129,7 +129,8 @@ class GFormConnectorPactTest extends SpecWithFakeApp with ScalaFutures {
       |      "businessArea": "BA"
       |    }
       |  },
-      |  "emailTemplateId": "classification"
+      |  "emailTemplateId": "classification",
+      |  "languages":["en"]
       |}
     """.stripMargin
 

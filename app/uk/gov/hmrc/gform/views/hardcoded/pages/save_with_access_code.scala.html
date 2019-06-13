@@ -20,25 +20,27 @@
 @import uk.gov.hmrc.gform.config.FrontendAppConfig
 @import uk.gov.hmrc.gform.views.hardcoded.pages._
 @import uk.gov.hmrc.gform.views.html.hardcoded.pages.partials._
+@import uk.gov.hmrc.gform.sharedmodel.LangADT
 
 @(
         accessCode: AccessCode,
         formTemplate: FormTemplate,
-        lang: Option[String],
         frontendAppConfig: FrontendAppConfig
-)(implicit request: Request[_], messages: Messages)
+)(implicit request: Request[_], messages: Messages, l:LangADT)
 
 @formCat = @{messages(s"formCategory.${formCategory(formTemplate)}")}
 @heading = @{messages("accessCode.saved.title", formCat)}
 
 @uk.gov.hmrc.gform.views.html.main_template(
   title = heading,
-  serviceName = formTemplate.formName,
+  serviceName = formTemplate.formName.value,
   bodyClasses = None,
   developmentPhase = formTemplate.developmentPhase.getOrElse(ResearchBanner),
   frontendAppConfig = frontendAppConfig,
   authConfig = Some(formTemplate.authConfig),
-  formCategory = formTemplate.formCategory
+  formCategory = formTemplate.formCategory,
+  languages = formTemplate.languages,
+  templateId = formTemplate._id
 ) {
   <div class = "transaction-banner--complete">
     <h1 class ="transaction-banner__heading">
@@ -78,7 +80,7 @@
       @messages("accessCode.exit")
     </li>
     <li>
-      <a href="@uk.gov.hmrc.gform.gform.routes.FormController.dashboard(formTemplate._id, lang)">
+      <a href="@uk.gov.hmrc.gform.gform.routes.FormController.dashboard(formTemplate._id)">
         @messages("accessCode.workOnAnother", formCat)
       </a>
     </li>
