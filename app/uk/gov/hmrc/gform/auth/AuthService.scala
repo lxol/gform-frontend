@@ -71,24 +71,15 @@ class AuthService(
           case authUnsuccessful  => Future.successful(authUnsuccessful)
         }
         performAgent(agentAccess, formTemplate, lang, ggAuthorised(RecoverAuthResult.noop), ifSuccessPerformEnrolment)
-      case _ => {
-        Logger.debug("OFSTED-AWS : Could not authorize")
-        Future.successful(notAuthorized)
-      }
     }
 
   private val notAuthorized: AuthResult = AuthBlocked("You are not authorized to access this service")
   private val decoder = Base64.getDecoder
 
   private def performAWSALBAuth()(implicit hc: HeaderCarrier): AuthResult = {
-    Logger.debug("HTTP OTHER HEADERS: " + hc.otherHeaders.toString())
-
     val encodedJWT: Option[String] = hc.otherHeaders.collectFirst {
       case (header, value) if header === "X-Amzn-Oidc-Data" => value
     }
-
-    Logger.debug("Encoded JWT: " + encodedJWT.toString)
-
     encodedJWT.fold(notAuthorized) { jwt =>
       jwt.split("\\.") match {
         case Array(header, payload, signature) =>
