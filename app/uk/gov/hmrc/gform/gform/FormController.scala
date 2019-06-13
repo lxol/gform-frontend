@@ -70,8 +70,6 @@ class FormController(
 
   implicit val frontendConfig: FrontendAppConfig = frontendAppConfig
 
-  val env = frontendConfig.gformEnvironment
-
   // TODO: this method should really be in the SignOutController which does not yet exist
   def keepAlive() = auth.keepAlive()
 
@@ -115,16 +113,13 @@ class FormController(
   def newForm(formTemplateId: FormTemplateId, lang: Option[String]) = auth.async(formTemplateId, lang) {
     implicit request => cache =>
       val noAccessCode = Option.empty[AccessCode]
-      println("\n\n\n\n ++++++++++ I GOT HERE TOO 0++++++++++\n\n\n\n")
       for {
         (formId, wasFormFound) <- getOrStartForm(formTemplateId, cache.retrievals, noAccessCode)
         result <- if (wasFormFound) {
                    Ok(continue_form_page(cache.formTemplate, choice, noAccessCode, lang, frontendAppConfig))
                      .pure[Future]
                  } else {
-                   println("\n\n\n\n ++++++++++ I GOT HERE TOO 0++++++++++\n\n\n\n") //TODO: take out
-
-                   if (env == "OFSTED") {
+                   if (frontendConfig.gformEnvironment == "OFSTED") {
                      for {
                        maybeForm <- getOfstedForm(formId)
                        res <- maybeForm match {
@@ -133,7 +128,6 @@ class FormController(
                                case None => Future.failed(new NotFoundException(s"Form with id $formId not found."))
                              }
                      } yield res
-
                    } else {
                      for {
                        maybeForm <- getForm(formId)
@@ -199,7 +193,6 @@ class FormController(
               Future.successful(Redirect(routes.FormController.newFormAgent(formTemplateId, lang)))
             case AgentAccessCode.optionAccess => {
               val maybeAccessCode: Option[AccessCode] = accessCodeF.accessCode.map(a => AccessCode(a))
-              println("+++++++++++++++++++++ I AM TRYING TO POST THE FORM +++++++++++++++++++++++++") //TODO: take out
               for {
                 maybeForm <- getForm(FormId(cache.retrievals, formTemplateId, maybeAccessCode))
                 res <- maybeForm match {
@@ -222,21 +215,17 @@ class FormController(
       )
     }
 
-  private def getOfstedForm(formId: FormId)(implicit hc: HeaderCarrier): Future[Option[Form]] = {
-    println("\n\n\n\n ++++++++++ I GOT HERE TOO 2++++++++++\n\n\n\n") //TODO: take out
+  private def getOfstedForm(formId: FormId)(implicit hc: HeaderCarrier): Future[Option[Form]] =
     for {
       maybeForm <- gformConnector.maybeForm(formId)
       maybeFormExceptSubmitted = maybeForm.filter(_.status != Submitted)
-      //TODO: change the name to remove envelope
       mayBeFormExceptWithEnvelope <- maybeFormExceptSubmitted match {
                                       case None    => None.pure[Future]
                                       case Some(_) => maybeFormExceptSubmitted.pure[Future]
                                     }
     } yield mayBeFormExceptWithEnvelope
-  }
 
-  private def getForm(formId: FormId)(implicit hc: HeaderCarrier): Future[Option[Form]] = {
-    println("++++++++++++ I SHOULD DEFO NOT BE HERE ++++++++++++++++++++++++++++++") //TODO: take out
+  private def getForm(formId: FormId)(implicit hc: HeaderCarrier): Future[Option[Form]] =
     for {
       maybeForm <- gformConnector.maybeForm(formId)
       maybeFormExceptSubmitted = maybeForm.filter(_.status != Submitted)
@@ -249,17 +238,14 @@ class FormController(
                                       case (Some(_), Some(_)) => maybeFormExceptSubmitted.pure[Future]
                                     }
     } yield mayBeFormExceptWithEnvelope
-  }
 
   private def startFreshForm(
     formTemplateId: FormTemplateId,
     retrievals: MaterialisedRetrievals,
-    maybeAccessCode: Option[AccessCode])(implicit hc: HeaderCarrier): Future[FormId] = {
-    println("\n\n\n\n ++++++++++ I GOT HERE TOO 2++++++++++\n\n\n\n") //TODO: take out
+    maybeAccessCode: Option[AccessCode])(implicit hc: HeaderCarrier): Future[FormId] =
     for {
       formId <- gformConnector.newForm(formTemplateId, UserId(retrievals), maybeAccessCode)
     } yield formId
-  }
 
   private def startForm(
     formTemplateId: FormTemplateId,
@@ -278,14 +264,12 @@ class FormController(
   private def getOrStartForm(
     formTemplateId: FormTemplateId,
     retrievals: MaterialisedRetrievals,
-    maybeAccessCode: Option[AccessCode])(implicit hc: HeaderCarrier): Future[(FormId, Boolean)] = {
-    println("\n\n\n\n ++++++++++ I GOT HERE TOO 1 ++++++++++\n\n\n\n") //TODO: take out
+    maybeAccessCode: Option[AccessCode])(implicit hc: HeaderCarrier): Future[(FormId, Boolean)] =
     for {
       maybeFormExceptSubmitted <- getOfstedForm(FormId(retrievals, formTemplateId, None))
       formId <- maybeFormExceptSubmitted.fold(startFreshForm(formTemplateId, retrievals, maybeAccessCode))(
                  _._id.pure[Future])
     } yield (formId, maybeFormExceptSubmitted.isDefined)
-  }
 
   def form(
     formTemplateId: FormTemplateId,
@@ -432,12 +416,8 @@ class FormController(
     maybeAccessCode: Option[AccessCode],
     sectionNumber: SectionNumber,
     lang: Option[String]
-  ) = auth.async(formTemplateId, lang, maybeAccessCode) {
-
-    implicit request => cache =>
-    processResponseDataFromBody(request) {
-
-      (dataRaw: Data) =>
+  ) = auth.async(formTemplateId, lang, maybeAccessCode) { implicit request => cache =>
+    processResponseDataFromBody(request) { (dataRaw: Data) =>
       def validateAndUpdateData(cache: AuthCacheWithForm, processData: ProcessData)(
         toResult: Option[SectionNumber] => Result): Future[Result] =
         for {

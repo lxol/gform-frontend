@@ -16,16 +16,18 @@
 
 package uk.gov.hmrc.gform.fileupload
 
+import uk.gov.hmrc.gform.config.FrontendAppConfig
 import uk.gov.hmrc.gform.sharedmodel.form.{ EnvelopeId, FileId }
+import uk.gov.hmrc.http.HeaderCarrier
 
 import scala.concurrent.Future
-import uk.gov.hmrc.http.HeaderCarrier
-import scala.concurrent.ExecutionContext.Implicits.global
-class FileUploadService(fileUploadConnector: FileUploadConnector) {
+
+class FileUploadService(fileUploadConnector: FileUploadConnector, frontendAppConfig: FrontendAppConfig) {
+
+  val env = frontendAppConfig.gformEnvironment
 
   def getEnvelope(envelopeId: EnvelopeId)(implicit hc: HeaderCarrier): Future[Envelope] =
-    // fileUploadConnector.getEnvelope(envelopeId) //TODO: need to check the environment here; if OFTSED do something else
-    Future { Envelope(List()) }
+    if (env == "OFSTED") Future.successful(Envelope(List())) else fileUploadConnector.getEnvelope(envelopeId)
 
   def getMaybeEnvelope(envelopeId: EnvelopeId)(implicit hc: HeaderCarrier): Future[Option[Envelope]] =
     fileUploadConnector.getMaybeEnvelope(envelopeId)
