@@ -20,6 +20,7 @@ import cats.data.NonEmptyList
 import cats.instances.option._
 import cats.syntax.foldable._
 import cats.syntax.option._
+import uk.gov.hmrc.gform.lookup._
 import uk.gov.hmrc.gform.sharedmodel.LangADT
 import uk.gov.hmrc.gform.sharedmodel.form.Form
 import uk.gov.hmrc.gform.sharedmodel.formtemplate._
@@ -27,11 +28,12 @@ import uk.gov.hmrc.gform.sharedmodel.structuredform.StructuredFormValue.{ ArrayN
 import uk.gov.hmrc.gform.sharedmodel.structuredform.{ Field, FieldName, StructuredFormValue }
 
 object StructuredFormDataBuilder {
-  def apply(form: Form, template: FormTemplate)(implicit l: LangADT): ObjectStructure =
-    StructuredFormValue.ObjectStructure(new StructuredFormDataBuilder(form, template).build())
+  def apply(form: Form, template: FormTemplate, lookupRegistry: LookupRegistry)(implicit l: LangADT): ObjectStructure =
+    StructuredFormValue.ObjectStructure(new StructuredFormDataBuilder(form, template, lookupRegistry).build())
 }
 
-class StructuredFormDataBuilder(form: Form, template: FormTemplate)(implicit l: LangADT) {
+class StructuredFormDataBuilder(form: Form, template: FormTemplate, lookupRegistry: LookupRegistry)(
+  implicit l: LangADT) {
   private val formValuesByUnindexedId: Map[FormComponentId, NonEmptyList[String]] =
     form.formData.fields
       .groupBy(f => f.id.reduceToTemplateFieldId)
@@ -119,11 +121,26 @@ class StructuredFormDataBuilder(form: Form, template: FormTemplate)(implicit l: 
     if (repeatable) buildRepeatingSimpleField(field, values, multiValue)
     else buildNonRepeatingSimpleField(field, values.head, multiValue)
 
+  private def lookupIdFromLabel(label: String, register: Register): String =
+    lookupRegistry.get(register).get match {
+      case r: RadioLookup => r.options(LookupLabel(label)).id
+      case a: AjaxLookup  => a.options(LookupLabel(label)).id
+    }
+
+  private def valueForFieldType(field: FormComponent, value: String): String =
+    field.`type` match {
+      case Text(Lookup(register), _, _, _) => lookupIdFromLabel(value, register)
+      case _                               => value
+    }
+
   private def buildNonRepeatingSimpleField(field: FormComponent, value: String, multiValue: Boolean): Field =
-    Field(FieldName(field.id.value), buildNode(value, multiValue), Map.empty)
+    Field(FieldName(field.id.value), buildNode(valueForFieldType(field, value), multiValue), Map.empty)
 
   private def buildRepeatingSimpleField(field: FormComponent, value: NonEmptyList[String], multiValue: Boolean): Field =
-    Field(FieldName(field.id.value), ArrayNode(value.toList.map(buildNode(_, multiValue))), Map.empty)
+    Field(
+      FieldName(field.id.value),
+      ArrayNode(value.toList.map(v => buildNode(valueForFieldType(field, v), multiValue))),
+      Map.empty)
 
   private def buildRevealingChoiceFields(id: FormComponentId, revealingChoice: RevealingChoice): Option[Field] =
     formValuesByUnindexedId.get(id).map(_.head).map { selectionStr =>
