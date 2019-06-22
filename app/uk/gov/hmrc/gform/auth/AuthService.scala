@@ -20,10 +20,9 @@ import java.util.Base64
 
 import cats.implicits._
 import play.api.Logger
-import play.api.libs.json.{ JsDefined, JsString, Json }
-
-import scala.util.{ Failure, Success, Try }
+import play.api.libs.json.Json
 import uk.gov.hmrc.auth.core.authorise._
+import uk.gov.hmrc.auth.core.retrieve.OneTimeLogin
 import uk.gov.hmrc.auth.core.{ AffinityGroup, AuthConnector => _, _ }
 import uk.gov.hmrc.gform.auth.models._
 import uk.gov.hmrc.gform.config.AppConfig
@@ -36,6 +35,7 @@ import uk.gov.hmrc.gform.submission.SubmissionRef
 import uk.gov.hmrc.http.HeaderCarrier
 
 import scala.concurrent.{ ExecutionContext, Future }
+import scala.util.{ Failure, Success, Try }
 
 class AuthService(
   appConfig: AppConfig,
@@ -82,16 +82,18 @@ class AuthService(
     val encodedJWT: Option[String] = hc.otherHeaders.collectFirst {
       case (header, value) if header === "X-Amzn-Oidc-Data" => value
     }
+
     encodedJWT.fold(notAuthorized) { jwt =>
       jwt.split("\\.") match {
         case Array(header, payload, signature) =>
           val payloadJson = new String(decoder.decode(payload))
           Try(Json.parse(payloadJson)) match {
-            case Success(json) =>
-              json \ "username" match {
-                case JsDefined(JsString(username)) => AuthSuccessful(AWSALBRetrievals(username))
-                case _                             => AuthBlocked("Username does not exist in JWT")
+            case Success(json) => {
+              Json.fromJson[JwtPayload](json).asOpt match {
+                case Some(jwtPayload) => AuthSuccessful(awsAlbAuthenticatedRetrieval(jwtPayload))
+                case None             => AuthBlocked("Not authorized")
               }
+            }
             case Failure(_) =>
               Logger.error(s"Corrupt JWT received from AWS ALB: payload is not a json: $payloadJson")
               notAuthorized
@@ -102,6 +104,44 @@ class AuthService(
       }
     }
   }
+
+  private def awsAlbAuthenticatedRetrieval(jwtPayload: JwtPayload): AuthenticatedRetrievals =
+    if (jwtPayload.iss == appConfig.albAdminIssuerUrl) {
+      AuthenticatedRetrievals(
+        OneTimeLogin,
+        Enrolments(Set.empty),
+        Some(AffinityGroup.Agent),
+        Some(jwtPayload.username),
+        Some(jwtPayload.username),
+        UserDetails(
+          None,
+          None,
+          jwtPayload.username,
+          email = Some(jwtPayload.email),
+          affinityGroup = AffinityGroup.Agent,
+          groupIdentifier = jwtPayload.username.replace('/', '-')),
+        None,
+        None
+      )
+    } else {
+      AuthenticatedRetrievals(
+        OneTimeLogin,
+        Enrolments(Set.empty),
+        Some(AffinityGroup.Individual),
+        Some(jwtPayload.username),
+        Some(jwtPayload.username),
+        UserDetails(
+          None,
+          None,
+          jwtPayload.username,
+          email = Some(jwtPayload.email),
+          affinityGroup = AffinityGroup.Individual,
+          groupIdentifier = jwtPayload.username.replace('/', '-')
+        ),
+        None,
+        None
+      )
+    }
 
   private def performEnrolment(
     formTemplate: FormTemplate,
@@ -218,7 +258,7 @@ class AuthService(
 
   def eeitReferenceNumber(retrievals: MaterialisedRetrievals): String =
     retrievals match {
-      case AnonymousRetrievals(_) | AWSALBRetrievals(_) => ""
+      case AnonymousRetrievals(_) => ""
       case AuthenticatedRetrievals(_, enrolments, _, _, _, userDetails, _, _) =>
         val identifier = userDetails.affinityGroup match {
           case AffinityGroup.Agent => EEITTAuthConfig.agentIdName

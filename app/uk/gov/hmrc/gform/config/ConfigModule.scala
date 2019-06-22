@@ -71,6 +71,7 @@ class ConfigModule(playBuiltInsModule: PlayBuiltInsModule) {
       )
     val contactFormServiceIdentifier = "GForm"
     FrontendAppConfig(
+      albAdminIssuerUrl = playConfiguration.getString("albAdminIssuerUrl").getOrElse(""),
       gformEnvironment = playConfiguration.getString("gform-environment").getOrElse(""),
       assetsPrefix = typesafeConfig.getString(s"assets.url") + typesafeConfig.getString(s"assets.version"),
       analyticsToken = typesafeConfig.getString(s"google-analytics.token"),
