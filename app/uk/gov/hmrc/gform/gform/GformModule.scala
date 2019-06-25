@@ -30,6 +30,7 @@ import uk.gov.hmrc.gform.graph.GraphModule
 import uk.gov.hmrc.gform.lookup.LookupRegistry
 import uk.gov.hmrc.gform.models.ProcessDataService
 import uk.gov.hmrc.gform.nonRepudiation.NonRepudiationHelpers
+import uk.gov.hmrc.gform.ofsted.OfstedAdminController
 import uk.gov.hmrc.gform.playcomponents.PlayBuiltInsModule
 import uk.gov.hmrc.gform.sharedmodel.LangADT
 import uk.gov.hmrc.gform.sharedmodel.formtemplate.Register
@@ -150,5 +151,8 @@ class GformModule(
 
   val signOutController: SignOutController =
     new SignOutController(configModule.frontendAppConfig, playBuiltInsModule.messagesApi)
+
+  val ofstedAdminController: OfstedAdminController =
+    new OfstedAdminController()
 
 }
