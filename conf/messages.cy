@@ -144,6 +144,21 @@ date.before=Rhaid i {0} fod cyn {1}
 date.after=Rhaid i {0} fod ar ôl {1}
 date.exactDate=Rhaid i {0} fod {1}
 date.isMissing=ar goll
+date.invalid=Rhaid i’r {0} fod yn ddyddiad dilys
+
+#Months
+date.January=Ionawr
+date.February=Chwefror
+date.March=Mawrth
+date.April=Ebrill
+date.May=Mai
+date.June=Mehefin
+date.July=Gorffennaf
+date.Augusts=Awst
+date.September=Medi
+date.October=Hydref
+date.November=Tachwedd
+date.December=Rhagfyr
 
 # explicit ordinals
 date.ordinal.1=af
