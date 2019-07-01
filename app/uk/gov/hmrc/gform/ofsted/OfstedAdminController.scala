@@ -16,18 +16,23 @@
 
 package uk.gov.hmrc.gform.ofsted
 
-import play.api.mvc.Action
-import uk.gov.hmrc.gform.ofsted.html.test
+import play.api.Logger
+import play.api.libs.json.Json
+import play.api.mvc.{ Action, AnyContent }
+import uk.gov.hmrc.gform.config.AppConfig
+import uk.gov.hmrc.gform.controllers.AuthenticatedRequestActions
+import uk.gov.hmrc.gform.sharedmodel.formtemplate.FormTemplateId
 import uk.gov.hmrc.play.frontend.controller.FrontendController
 
-class OfstedAdminController() extends FrontendController {
+import scala.concurrent.Future
 
-  def adminStart() = Action { implicit request =>
-    Ok(test())
-  }
+class OfstedAdminController(appConfig: AppConfig, auth: AuthenticatedRequestActions) extends FrontendController {
 
-  def adminReview(formTemplateId: String) = Action { implicit request =>
-    Ok("")
-  }
-
+  def adminReview(formTemplateId: FormTemplateId): Action[AnyContent] =
+    auth.asyncAlbAuth(formTemplateId) { implicit request => implicit l => cache =>
+      val formReview = Json.fromJson[FormReview](request.body.asJson.get).get //TODO: fix to make safe
+      val fullUrl = appConfig.`gform-frontend-base-url` + formReview.redirectUri
+      Logger.info(s"Redirecting user to: $fullUrl")
+      Future.successful(Redirect(fullUrl))
+    }
 }

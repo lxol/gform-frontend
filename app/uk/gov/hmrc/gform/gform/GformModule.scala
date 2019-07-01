@@ -153,6 +153,6 @@ class GformModule(
     new SignOutController(configModule.frontendAppConfig, playBuiltInsModule.messagesApi)
 
   val ofstedAdminController: OfstedAdminController =
-    new OfstedAdminController()
+    new OfstedAdminController(configModule.appConfig, controllersModule.authenticatedRequestActions)
 
 }

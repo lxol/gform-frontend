@@ -83,12 +83,18 @@ class AuthService(
       case (header, value) if header === "X-Amzn-Oidc-Data" => value
     }
 
+    Logger.info(
+      s"Performing ALB authorization with following parameters: ALB JWT ${encodedJWT.getOrElse("No ALB JWT")}")
+
+    //TODO: Check if this is an admin and then extract the hashed value of the assumed gg id. If no hashed value exists then forbid?
+    //  If it does exist then assume that gg id
     encodedJWT.fold(notAuthorized) { jwt =>
       jwt.split("\\.") match {
         case Array(header, payload, signature) =>
           val payloadJson = new String(decoder.decode(payload))
           Try(Json.parse(payloadJson)) match {
             case Success(json) => {
+              Logger.debug(s"JWT Payload is [${json.toString()}]")
               Json.fromJson[JwtPayload](json).asOpt match {
                 case Some(jwtPayload) => AuthSuccessful(awsAlbAuthenticatedRetrieval(jwtPayload))
                 case None             => AuthBlocked("Not authorized")
@@ -119,7 +125,7 @@ class AuthService(
           jwtPayload.username,
           email = Some(jwtPayload.email),
           affinityGroup = AffinityGroup.Agent,
-          groupIdentifier = jwtPayload.username.replace('/', '-')),
+          groupIdentifier = jwtPayload.username),
         None,
         None
       )
@@ -136,7 +142,7 @@ class AuthService(
           jwtPayload.username,
           email = Some(jwtPayload.email),
           affinityGroup = AffinityGroup.Individual,
-          groupIdentifier = jwtPayload.username.replace('/', '-')
+          groupIdentifier = jwtPayload.username
         ),
         None,
         None

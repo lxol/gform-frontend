@@ -20,12 +20,12 @@ package controllers
 import cats.data.NonEmptyList
 import cats.instances.future._
 import cats.syntax.applicative._
-import java.util.UUID
+import java.util.{ Base64, UUID }
 
 import play.api.Logger
 import play.api.http.HeaderNames
 import play.api.i18n.{ I18nSupport, Lang, Langs }
-import play.api.libs.json.Json
+import play.api.libs.json.{ JsError, JsSuccess, JsValue, Json }
 import play.api.mvc.Results._
 import play.api.mvc._
 
@@ -43,10 +43,14 @@ import uk.gov.hmrc.auth.core.retrieve.{ Retrievals => _, _ }
 import uk.gov.hmrc.auth.core.retrieve.v2._
 import uk.gov.hmrc.auth.core.authorise.Predicate
 import uk.gov.hmrc.gform.sharedmodel._
+import uk.gov.hmrc.auth.core.AffinityGroup
+import uk.gov.hmrc.gform.ofsted.FormReview
 
 import scala.concurrent.Future
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.play.HeaderCarrierConverter
+
+import scala.util.{ Failure, Success, Try }
 
 class AuthenticatedRequestActions(
   gformConnector: GformConnector,
@@ -149,6 +153,92 @@ class AuthenticatedRequestActions(
                  }
       } yield result
   }
+
+  private val notAuthorized: Future[AuthResult] = AuthBlocked("You are not authorized to access this service")
+    .pure[Future]
+  private val decoder = Base64.getDecoder
+
+  def asyncAlbAuth(formTemplateId: FormTemplateId)(
+    f: Request[AnyContent] => LangADT => AuthCacheWithoutForm => Future[Result]): Action[AnyContent] =
+    Action.async { implicit request =>
+      request.body.asJson match {
+        case Some(json) => {
+          Json.fromJson[FormReview](json) match {
+            case JsSuccess(formReview, _) => {
+              for {
+                formTemplate <- gformConnector.getFormTemplate(formTemplateId)
+                authResult   <- albAuthorised(request, formReview)
+                result <- authResult match {
+                           case AuthSuccessful(retrievals) => {
+                             f(request)(getCurrentLanguage(request))(AuthCacheWithoutForm(retrievals, formTemplate))
+                           }
+                           case _ => errResponder.forbidden(request, "Access denied")
+                         }
+              } yield result
+            }
+            case JsError(_) => errResponder.badRequest(request, "Access denied")
+          }
+        }
+        case None => errResponder.forbidden(request, "Access denied")
+      }
+    }
+
+  private def albAuthorised(request: Request[AnyContent], formReview: FormReview): Future[AuthResult] = {
+
+    implicit val hc: HeaderCarrier =
+      HeaderCarrierConverter.fromHeadersAndSession(request.headers, Some(request.session))
+
+    val encodedJWT: Option[String] = hc.otherHeaders.collectFirst {
+      case (header, value) if header == "X-Amzn-Oidc-Data" => value
+    }
+
+    Logger.info(s"Performing ALB authorization with following parameters: ALB JWT ${encodedJWT
+      .getOrElse("No ALB JWT")} | form reviews ${formReview.toString}")
+
+    encodedJWT.fold(notAuthorized) { jwt =>
+      jwt.split("\\.") match {
+        case Array(_, payload, _) =>
+          val payloadJson = new String(decoder.decode(payload))
+          Try(Json.parse(payloadJson)) match {
+            case Success(json) => {
+              Json.fromJson[JwtPayload](json).asOpt match {
+                case Some(jwtPayload) if jwtPayload.iss == appConfig.albAdminIssuerUrl => {
+                  Logger.info(s"Admin is ${jwtPayload.iss}")
+                  AuthSuccessful(awsAlbAuthenticatedRetrieval(jwtPayload, formReview)).pure[Future]
+                }
+                case None => AuthBlocked("Not authorized").pure[Future]
+              }
+            }
+            case Failure(_) => {
+              Logger.error(s"Corrupt JWT received from AWS ALB: payload is not a json: $payloadJson")
+              notAuthorized
+            }
+          }
+        case _ => {
+          Logger.error(s"Corrupt JWT received from AWS ALB: [$jwt]")
+          notAuthorized
+        }
+      }
+    }
+  }
+
+  private def awsAlbAuthenticatedRetrieval(jwtPayload: JwtPayload, formReview: FormReview): AuthenticatedRetrievals =
+    AuthenticatedRetrievals(
+      OneTimeLogin,
+      Enrolments(Set.empty),
+      Some(AffinityGroup.Agent),
+      Some(formReview.assumedIdentity),
+      Some(formReview.assumedIdentity),
+      UserDetails(
+        None,
+        None,
+        formReview.assumedIdentity,
+        email = Some(jwtPayload.email),
+        affinityGroup = AffinityGroup.Agent,
+        groupIdentifier = formReview.assumedIdentity),
+      None,
+      Some(formReview.assumedIdentity)
+    )
 
   def async(formTemplateId: FormTemplateId, maybeAccessCode: Option[AccessCode])(
     f: Request[AnyContent] => LangADT => AuthCacheWithForm => Future[Result]): Action[AnyContent] =

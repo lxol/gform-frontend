@@ -1,4 +1,4 @@
-@*
+/*
  * Copyright 2019 HM Revenue & Customs
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,19 +12,14 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *@
+ */
 
-@import helper._
+package uk.gov.hmrc.gform.ofsted
 
-@import uk.gov.hmrc.gform.ofsted.routes._
+import play.api.libs.json.Json
 
-@()(implicit request : RequestHeader)
+case class FormReview(formTemplateId: String, assumedIdentity: String, redirectUri: Option[String])
 
-<h1>Ofsted Case Worker Review Page</h1>
-
-<h2>List of forms</h2>
-
-@helper.form(action = OfstedAdminController.adminReview("some-form-template")){
- @CSRF.formField
- <input type="submit" value="Review form">
+object FormReview {
+  implicit val format = Json.format[FormReview]
 }
