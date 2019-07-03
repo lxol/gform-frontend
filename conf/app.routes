@@ -44,4 +44,4 @@ GET           /lookup/:formTemplateId/:register/:query                          
 GET           /sign-out/:formTemplateId                                                                          uk.gov.hmrc.gform.gform.SignOutController.signOut(formTemplateId: FormTemplateId)
 GET           /signed-out                                                                                        uk.gov.hmrc.gform.gform.SignOutController.showSignedOutPage(signBackInUrl: String)
 
-POST          /admin-review/:formTemplateId                                                                      uk.gov.hmrc.gform.ofsted.OfstedAdminController.adminReview(formTemplateId : FormTemplateId)
+GET          /admin-review/:formTemplateId/:assumedId/:redirectUri                                               uk.gov.hmrc.gform.ofsted.OfstedAdminController.adminReview(formTemplateId : FormTemplateId, assumedId : String, redirectUri : String)

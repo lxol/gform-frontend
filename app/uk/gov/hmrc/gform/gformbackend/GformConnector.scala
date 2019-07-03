@@ -20,6 +20,7 @@ import cats.data.NonEmptyList
 import play.api.libs.json.JsValue
 import uk.gov.hmrc.auth.core.AffinityGroup
 import uk.gov.hmrc.gform.gform.CustomerId
+import uk.gov.hmrc.gform.ofsted.{ AssumedIdentity, FormReview }
 import uk.gov.hmrc.gform.sharedmodel.AffinityGroupUtil._
 import uk.gov.hmrc.gform.sharedmodel._
 import uk.gov.hmrc.gform.sharedmodel.config.{ ContentType, ExposedConfig }
@@ -37,6 +38,15 @@ import scala.concurrent.{ ExecutionContext, Future }
   * Edit it there first and propagate it from there.
   */
 class GformConnector(ws: WSHttp, baseUrl: String) {
+
+  def saveAssumedIdentity(
+    assumedIdentity: AssumedIdentity)(implicit hc: HeaderCarrier, ec: ExecutionContext): Future[HttpResponse] =
+    ws.POST[AssumedIdentity, HttpResponse](s"$baseUrl/ofsted-admin", assumedIdentity, Seq())
+
+  def getAssumedIdentity(uuid: String)(implicit hc: HeaderCarrier, ec: ExecutionContext): Future[Option[String]] =
+    ws.GET[String](s"$baseUrl/ofsted-admin/$uuid").map(Some(_)).recover {
+      case e: NotFoundException => None
+    }
 
   /******form*******/
   //TODO: remove userId since this information will be passed using HeaderCarrier

@@ -16,28 +16,40 @@
 
 package uk.gov.hmrc.gform.ofsted
 
-import play.api.Logger
-import play.api.mvc.{Action, AnyContent}
+import java.util.UUID
+
+import play.api.mvc.{ Action, AnyContent }
 import uk.gov.hmrc.gform.config.AppConfig
 import uk.gov.hmrc.gform.controllers.AuthenticatedRequestActions
+import uk.gov.hmrc.gform.gformbackend.GformConnector
 import uk.gov.hmrc.gform.sharedmodel.formtemplate.FormTemplateId
 import uk.gov.hmrc.play.frontend.controller.FrontendController
 
 import scala.concurrent.Future
 
-class OfstedAdminController(appConfig: AppConfig, auth: AuthenticatedRequestActions) extends FrontendController {
+class OfstedAdminController(appConfig: AppConfig, gformConnector: GformConnector, auth: AuthenticatedRequestActions)
+    extends FrontendController {
 
-  def adminReview(formTemplateId: FormTemplateId): Action[AnyContent] =
+  def adminReview(formTemplateId: FormTemplateId, assumedId: String, redirectUri: String): Action[AnyContent] =
     auth.asyncAlbAuth(formTemplateId) { implicit request => implicit l => cache =>
-      request.body.asFormUrlEncoded match {
-        case Some(data) => {
-          val formReview =
-            FormReview(data("formTemplateId").head, data("assumedIdentity").head, Some(data("redirectUri").head))
-          val fullUrl = appConfig.`gform-frontend-base-url` + formReview.redirectUri
-          Logger.info(s"Redirecting user to: $fullUrl")
-          Future.successful(Redirect(fullUrl))
-        }
-        case None => Future.successful(BadRequest)
-    }
+//      val formReview = FormReview(formTemplateId.value, assumedId, redirectUri)
+      val fullUrl = appConfig.`gform-frontend-base-url` + redirectUri
+//      val uuid = UUID.randomUUID().toString
+//      val ai = AssumedIdentity(uuid, formReview.assumedIdentity)
+//
+      Future.successful(Redirect(fullUrl))
+
+//      gformConnector.saveAssumedIdentity(AssumedIdentity(uuid, formReview.assumedIdentity)).map { res =>
+//        res.status match {
+//          case 200 => {
+//            Logger.info(s"Redirecting user after successfully saving assumed identity to : [$fullUrl | $uuid]")
+//            Redirect(fullUrl).withSession("assumed-identity" -> uuid)
+//          }
+//          case _ => {
+//            Logger.error(s"Failed to save assumed identity, HTTP Response from backend call: [${res.toString}]")
+//            BadRequest("Unable to save assumed identity")
+//          }
+//        }
+//      }
     }
 }

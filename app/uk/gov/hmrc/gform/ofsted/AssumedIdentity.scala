@@ -18,8 +18,8 @@ package uk.gov.hmrc.gform.ofsted
 
 import play.api.libs.json.Json
 
-case class FormReview(formTemplateId: String, assumedIdentity: String, redirectUri: String)
+case class AssumedIdentity(uuid: String, assumedIdentity: String)
 
-object FormReview {
-  implicit val format = Json.format[FormReview]
+object AssumedIdentity {
+  implicit val format = Json.format[AssumedIdentity]
 }
