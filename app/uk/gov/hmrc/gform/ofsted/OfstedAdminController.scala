@@ -17,8 +17,7 @@
 package uk.gov.hmrc.gform.ofsted
 
 import play.api.Logger
-import play.api.libs.json.Json
-import play.api.mvc.{ Action, AnyContent }
+import play.api.mvc.{Action, AnyContent}
 import uk.gov.hmrc.gform.config.AppConfig
 import uk.gov.hmrc.gform.controllers.AuthenticatedRequestActions
 import uk.gov.hmrc.gform.sharedmodel.formtemplate.FormTemplateId
@@ -30,9 +29,15 @@ class OfstedAdminController(appConfig: AppConfig, auth: AuthenticatedRequestActi
 
   def adminReview(formTemplateId: FormTemplateId): Action[AnyContent] =
     auth.asyncAlbAuth(formTemplateId) { implicit request => implicit l => cache =>
-      val formReview = Json.fromJson[FormReview](request.body.asJson.get).get //TODO: fix to make safe
-      val fullUrl = appConfig.`gform-frontend-base-url` + formReview.redirectUri
-      Logger.info(s"Redirecting user to: $fullUrl")
-      Future.successful(Redirect(fullUrl))
+      request.body.asFormUrlEncoded match {
+        case Some(data) => {
+          val formReview =
+            FormReview(data("formTemplateId").head, data("assumedIdentity").head, Some(data("redirectUri").head))
+          val fullUrl = appConfig.`gform-frontend-base-url` + formReview.redirectUri
+          Logger.info(s"Redirecting user to: $fullUrl")
+          Future.successful(Redirect(fullUrl))
+        }
+        case None => Future.successful(BadRequest)
+    }
     }
 }
