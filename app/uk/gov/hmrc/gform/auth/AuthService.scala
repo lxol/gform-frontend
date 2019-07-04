@@ -28,6 +28,7 @@ import uk.gov.hmrc.gform.auth.models._
 import uk.gov.hmrc.gform.config.AppConfig
 import uk.gov.hmrc.gform.gform
 import uk.gov.hmrc.gform.gform.{ AuthContextPrepop, EeittService }
+import uk.gov.hmrc.gform.ofsted.AssumedIdentity
 import uk.gov.hmrc.gform.sharedmodel.LangADT
 import uk.gov.hmrc.gform.sharedmodel.form.EnvelopeId
 import uk.gov.hmrc.gform.sharedmodel.formtemplate.{ Enrolment => _, _ }
@@ -49,7 +50,8 @@ class AuthService(
     formTemplate: FormTemplate,
     requestUri: String,
     getAffinityGroup: Unit => Future[Option[AffinityGroup]],
-    ggAuthorised: PartialFunction[Throwable, AuthResult] => Predicate => Future[AuthResult]
+    ggAuthorised: PartialFunction[Throwable, AuthResult] => Predicate => Future[AuthResult],
+    assumedIdentity: Option[String]
   )(
     implicit hc: HeaderCarrier,
     l: LangADT
@@ -60,7 +62,7 @@ class AuthService(
           .fold[AuthResult](AuthAnonymousSession(gform.routes.FormController.dashboard(formTemplate._id)))(sessionId =>
             AuthSuccessful(AnonymousRetrievals(sessionId)))
           .pure[Future]
-      case AWSALBAuth            => performAWSALBAuth().pure[Future]
+      case AWSALBAuth            => performAWSALBAuth(assumedIdentity).pure[Future]
       case EeittModule(regimeId) => performEEITTAuth(regimeId, requestUri, ggAuthorised(RecoverAuthResult.noop))
       case HmrcSimpleModule      => performGGAuth(ggAuthorised(RecoverAuthResult.noop))
       case HmrcEnrolmentModule(enrolmentAuth) =>
@@ -78,13 +80,12 @@ class AuthService(
   private val notAuthorized: AuthResult = AuthBlocked("You are not authorized to access this service")
   private val decoder = Base64.getDecoder
 
-  private def performAWSALBAuth()(implicit hc: HeaderCarrier): AuthResult = {
+  private def performAWSALBAuth(assumedIdentity: Option[String])(implicit hc: HeaderCarrier): AuthResult = {
     val encodedJWT: Option[String] = hc.otherHeaders.collectFirst {
       case (header, value) if header === "X-Amzn-Oidc-Data" => value
     }
 
-    Logger.info(
-      s"Performing ALB authorization with following parameters: ALB JWT ${encodedJWT.getOrElse("No ALB JWT")}")
+    Logger.info(s"ALB JWT: ${encodedJWT.getOrElse("No ALB JWT")}")
 
     //TODO: Check if this is an admin and then extract the hashed value of the assumed gg id. If no hashed value exists then forbid?
     //  If it does exist then assume that gg id
@@ -96,7 +97,7 @@ class AuthService(
             case Success(json) => {
               Logger.debug(s"JWT Payload is [${json.toString()}]")
               Json.fromJson[JwtPayload](json).asOpt match {
-                case Some(jwtPayload) => AuthSuccessful(awsAlbAuthenticatedRetrieval(jwtPayload))
+                case Some(jwtPayload) => AuthSuccessful(awsAlbAuthenticatedRetrieval(jwtPayload, assumedIdentity))
                 case None             => AuthBlocked("Not authorized")
               }
             }
@@ -111,21 +112,29 @@ class AuthService(
     }
   }
 
-  private def awsAlbAuthenticatedRetrieval(jwtPayload: JwtPayload): AuthenticatedRetrievals =
+  private def awsAlbAuthenticatedRetrieval(
+    jwtPayload: JwtPayload,
+    assumedIdentity: Option[String]): AuthenticatedRetrievals =
     if (jwtPayload.iss == appConfig.albAdminIssuerUrl) {
+
+      val identity = assumedIdentity match {
+        case Some(user) => user
+        case None       => jwtPayload.username
+      }
+
       AuthenticatedRetrievals(
         OneTimeLogin,
         Enrolments(Set.empty),
         Some(AffinityGroup.Agent),
-        Some(jwtPayload.username),
-        Some(jwtPayload.username),
+        Some(identity),
+        Some(identity),
         UserDetails(
           None,
           None,
-          jwtPayload.username,
+          identity,
           email = Some(jwtPayload.email),
           affinityGroup = AffinityGroup.Agent,
-          groupIdentifier = jwtPayload.username),
+          groupIdentifier = identity),
         None,
         None
       )

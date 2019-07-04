@@ -125,10 +125,19 @@ class AuthenticatedRequestActions(
     f: Request[AnyContent] => LangADT => AuthCacheWithoutForm => Future[Result]): Action[AnyContent] = Action.async {
     implicit request =>
       implicit val l: LangADT = getCurrentLanguage(request)
+
+      val assumedIdentity: Option[String] = request.session.get("assumed-identity")
+      Logger.info(s"AWS ALB AUTH assumed identity token is : ${assumedIdentity.getOrElse("No assumed identity token")}")
+
       for {
         formTemplate <- gformConnector.getFormTemplate(formTemplateId)
         authResult <- authService
-                       .authenticateAndAuthorise(formTemplate, request.uri, getAffinityGroup, ggAuthorised(request))
+                       .authenticateAndAuthorise(
+                         formTemplate,
+                         request.uri,
+                         getAffinityGroup,
+                         ggAuthorised(request),
+                         assumedIdentity)
         newRequest = removeEeittAuthIdFromSession(request, formTemplate.authConfig)
         result <- handleAuthResults(
                    authResult,
@@ -158,32 +167,23 @@ class AuthenticatedRequestActions(
     .pure[Future]
   private val decoder = Base64.getDecoder
 
-  def asyncAlbAuth(formTemplateId: FormTemplateId)(
+  def asyncAlbAuth(formTemplateId: FormTemplateId, assumedIdentity: String)(
     f: Request[AnyContent] => LangADT => AuthCacheWithoutForm => Future[Result]): Action[AnyContent] =
     Action.async { implicit request =>
-      request.body.asJson match {
-        case Some(json) => {
-          Json.fromJson[FormReview](json) match {
-            case JsSuccess(formReview, _) => {
-              for {
-                formTemplate <- gformConnector.getFormTemplate(formTemplateId)
-                authResult   <- albAuthorised(request, formReview)
-                result <- authResult match {
-                           case AuthSuccessful(retrievals) => {
-                             f(request)(getCurrentLanguage(request))(AuthCacheWithoutForm(retrievals, formTemplate))
-                           }
-                           case _ => errResponder.forbidden(request, "Access denied")
-                         }
-              } yield result
-            }
-            case JsError(_) => errResponder.badRequest(request, "Access denied")
-          }
-        }
-        case None => errResponder.forbidden(request, "Access denied")
-      }
+      Logger.info("Starting admin authorization check...")
+      for {
+        formTemplate <- gformConnector.getFormTemplate(formTemplateId)
+        authResult   <- albAuthorised(request, assumedIdentity)
+        result <- authResult match {
+                   case AuthSuccessful(retrievals) => {
+                     f(request)(getCurrentLanguage(request))(AuthCacheWithoutForm(retrievals, formTemplate))
+                   }
+                   case _ => errResponder.forbidden(request, "Access denied")
+                 }
+      } yield result
     }
 
-  private def albAuthorised(request: Request[AnyContent], formReview: FormReview): Future[AuthResult] = {
+  private def albAuthorised(request: Request[AnyContent], assumedIdentity: String): Future[AuthResult] = {
 
     implicit val hc: HeaderCarrier =
       HeaderCarrierConverter.fromHeadersAndSession(request.headers, Some(request.session))
@@ -193,7 +193,7 @@ class AuthenticatedRequestActions(
     }
 
     Logger.info(s"Performing ALB authorization with following parameters: ALB JWT ${encodedJWT
-      .getOrElse("No ALB JWT")} | form reviews ${formReview.toString}")
+      .getOrElse("No ALB JWT")}")
 
     encodedJWT.fold(notAuthorized) { jwt =>
       jwt.split("\\.") match {
@@ -204,7 +204,7 @@ class AuthenticatedRequestActions(
               Json.fromJson[JwtPayload](json).asOpt match {
                 case Some(jwtPayload) if jwtPayload.iss == appConfig.albAdminIssuerUrl => {
                   Logger.info(s"Admin is ${jwtPayload.iss}")
-                  AuthSuccessful(awsAlbAuthenticatedRetrieval(jwtPayload, formReview)).pure[Future]
+                  AuthSuccessful(awsAlbAuthenticatedRetrieval(jwtPayload, assumedIdentity)).pure[Future]
                 }
                 case None => AuthBlocked("Not authorized").pure[Future]
               }
@@ -222,32 +222,39 @@ class AuthenticatedRequestActions(
     }
   }
 
-  private def awsAlbAuthenticatedRetrieval(jwtPayload: JwtPayload, formReview: FormReview): AuthenticatedRetrievals =
+  private def awsAlbAuthenticatedRetrieval(jwtPayload: JwtPayload, assumedIdentity: String): AuthenticatedRetrievals =
     AuthenticatedRetrievals(
       OneTimeLogin,
       Enrolments(Set.empty),
       Some(AffinityGroup.Agent),
-      Some(formReview.assumedIdentity),
-      Some(formReview.assumedIdentity),
+      Some(assumedIdentity),
+      Some(assumedIdentity),
       UserDetails(
         None,
         None,
-        formReview.assumedIdentity,
+        assumedIdentity,
         email = Some(jwtPayload.email),
         affinityGroup = AffinityGroup.Agent,
-        groupIdentifier = formReview.assumedIdentity),
+        groupIdentifier = assumedIdentity),
       None,
-      Some(formReview.assumedIdentity)
+      Some(assumedIdentity)
     )
 
   def async(formTemplateId: FormTemplateId, maybeAccessCode: Option[AccessCode])(
     f: Request[AnyContent] => LangADT => AuthCacheWithForm => Future[Result]): Action[AnyContent] =
     Action.async { implicit request =>
       implicit val l: LangADT = getCurrentLanguage(request)
+      val assumedIdentity: Option[String] = request.session.get("assumed-identity")
+      Logger.info(s"AWS ALB AUTH assumed identity token is : ${assumedIdentity.getOrElse("No assumed identity token")}")
       for {
         formTemplate <- gformConnector.getFormTemplate(formTemplateId)
         authResult <- authService
-                       .authenticateAndAuthorise(formTemplate, request.uri, getAffinityGroup, ggAuthorised(request))
+                       .authenticateAndAuthorise(
+                         formTemplate,
+                         request.uri,
+                         getAffinityGroup,
+                         ggAuthorised(request),
+                         assumedIdentity)
         newRequest = removeEeittAuthIdFromSession(request, formTemplate.authConfig)
         result <- handleAuthResults(
                    authResult,

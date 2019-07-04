@@ -18,6 +18,7 @@ package uk.gov.hmrc.gform.ofsted
 
 import java.util.UUID
 
+import play.Logger
 import play.api.mvc.{ Action, AnyContent }
 import uk.gov.hmrc.gform.config.AppConfig
 import uk.gov.hmrc.gform.controllers.AuthenticatedRequestActions
@@ -31,9 +32,10 @@ class OfstedAdminController(appConfig: AppConfig, gformConnector: GformConnector
     extends FrontendController {
 
   def adminReview(formTemplateId: FormTemplateId, assumedId: String, redirectUri: String): Action[AnyContent] =
-    auth.asyncAlbAuth(formTemplateId) { implicit request => implicit l => cache =>
+    auth.asyncAlbAuth(formTemplateId, assumedId) { implicit request => implicit l => cache =>
 //      val formReview = FormReview(formTemplateId.value, assumedId, redirectUri)
       val fullUrl = appConfig.`gform-frontend-base-url` + redirectUri
+      Logger.info(s"Admin is authorized: redirecting admin to [$fullUrl]...")
 //      val uuid = UUID.randomUUID().toString
 //      val ai = AssumedIdentity(uuid, formReview.assumedIdentity)
 //
