@@ -193,7 +193,7 @@ class AuthenticatedRequestActions(
     }
 
     Logger.info(s"Performing ALB authorization with following parameters: ALB JWT ${encodedJWT
-      .getOrElse("No ALB JWT")}")
+      .getOrElse("No ALB JWT")} | IDP URL is ${appConfig.albAdminIssuerUrl}")
 
     encodedJWT.fold(notAuthorized) { jwt =>
       jwt.split("\\.") match {
@@ -222,7 +222,9 @@ class AuthenticatedRequestActions(
     }
   }
 
-  private def awsAlbAuthenticatedRetrieval(jwtPayload: JwtPayload, assumedIdentity: String): AuthenticatedRetrievals =
+  private def awsAlbAuthenticatedRetrieval(jwtPayload: JwtPayload, assumedIdentity: String): AuthenticatedRetrievals = {
+    Logger.info(s"Make admin assume the following identity: $assumedIdentity")
+
     AuthenticatedRetrievals(
       OneTimeLogin,
       Enrolments(Set.empty),
@@ -239,6 +241,7 @@ class AuthenticatedRequestActions(
       None,
       Some(assumedIdentity)
     )
+  }
 
   def async(formTemplateId: FormTemplateId, maybeAccessCode: Option[AccessCode])(
     f: Request[AnyContent] => LangADT => AuthCacheWithForm => Future[Result]): Action[AnyContent] =
