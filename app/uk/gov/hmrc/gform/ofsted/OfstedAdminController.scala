@@ -31,15 +31,15 @@ import scala.concurrent.Future
 class OfstedAdminController(appConfig: AppConfig, gformConnector: GformConnector, auth: AuthenticatedRequestActions)
     extends FrontendController {
 
-  def adminReview(formTemplateId: FormTemplateId, assumedId: String, redirectUri: String): Action[AnyContent] =
-    auth.asyncAlbAuth(formTemplateId, assumedId) { implicit request => implicit l => cache =>
+  def adminReview(formTemplateId: FormTemplateId, assumedIdentity: String, redirectUri: String): Action[AnyContent] =
+    auth.asyncAlbAuth(formTemplateId, assumedIdentity) { implicit request => implicit l => cache =>
 //      val formReview = FormReview(formTemplateId.value, assumedId, redirectUri)
       val fullUrl = appConfig.`gform-frontend-base-url` + redirectUri
       Logger.info(s"Admin is authorized: redirecting admin to [$fullUrl]...")
 //      val uuid = UUID.randomUUID().toString
 //      val ai = AssumedIdentity(uuid, formReview.assumedIdentity)
 //
-      Future.successful(Redirect(fullUrl))
+      Future.successful(Redirect(fullUrl).withSession("assumed-identity" -> assumedIdentity))
 
 //      gformConnector.saveAssumedIdentity(AssumedIdentity(uuid, formReview.assumedIdentity)).map { res =>
 //        res.status match {

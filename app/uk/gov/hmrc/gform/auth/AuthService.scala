@@ -28,7 +28,6 @@ import uk.gov.hmrc.gform.auth.models._
 import uk.gov.hmrc.gform.config.AppConfig
 import uk.gov.hmrc.gform.gform
 import uk.gov.hmrc.gform.gform.{ AuthContextPrepop, EeittService }
-import uk.gov.hmrc.gform.ofsted.AssumedIdentity
 import uk.gov.hmrc.gform.sharedmodel.LangADT
 import uk.gov.hmrc.gform.sharedmodel.form.EnvelopeId
 import uk.gov.hmrc.gform.sharedmodel.formtemplate.{ Enrolment => _, _ }
@@ -87,11 +86,9 @@ class AuthService(
 
     Logger.info(s"ALB JWT: ${encodedJWT.getOrElse("No ALB JWT")}")
 
-    //TODO: Check if this is an admin and then extract the hashed value of the assumed gg id. If no hashed value exists then forbid?
-    //  If it does exist then assume that gg id
     encodedJWT.fold(notAuthorized) { jwt =>
       jwt.split("\\.") match {
-        case Array(header, payload, signature) =>
+        case Array(_, payload, _) =>
           val payloadJson = new String(decoder.decode(payload))
           Try(Json.parse(payloadJson)) match {
             case Success(json) => {
@@ -121,6 +118,8 @@ class AuthService(
         case Some(user) => user
         case None       => jwtPayload.username
       }
+
+      Logger.info(s"Admin will assume the following user identity : [$identity]")
 
       AuthenticatedRetrievals(
         OneTimeLogin,
