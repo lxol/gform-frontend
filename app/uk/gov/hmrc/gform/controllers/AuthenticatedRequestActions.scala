@@ -201,7 +201,7 @@ class AuthenticatedRequestActions(
           val payloadJson = new String(decoder.decode(payload))
           Try(Json.parse(payloadJson)) match {
             case Success(json) => {
-              Json.fromJson[JwtPayload](json).asOpt match {
+              Json.fromJson[AdminJwtPayload](json).asOpt match {
                 case Some(jwtPayload) if jwtPayload.iss == appConfig.albAdminIssuerUrl => {
                   Logger.info(s"Admin is ${jwtPayload.iss}")
                   AuthSuccessful(awsAlbAuthenticatedRetrieval(jwtPayload, assumedIdentity)).pure[Future]
@@ -222,7 +222,9 @@ class AuthenticatedRequestActions(
     }
   }
 
-  private def awsAlbAuthenticatedRetrieval(jwtPayload: JwtPayload, assumedIdentity: String): AuthenticatedRetrievals = {
+  private def awsAlbAuthenticatedRetrieval(
+    jwtPayload: AdminJwtPayload,
+    assumedIdentity: String): AuthenticatedRetrievals = {
     Logger.info(s"Make admin assume the following identity: $assumedIdentity")
 
     AuthenticatedRetrievals(
@@ -235,7 +237,7 @@ class AuthenticatedRequestActions(
         None,
         None,
         assumedIdentity,
-        email = Some(jwtPayload.email),
+        email = Some(""),
         affinityGroup = AffinityGroup.Agent,
         groupIdentifier = assumedIdentity),
       None,

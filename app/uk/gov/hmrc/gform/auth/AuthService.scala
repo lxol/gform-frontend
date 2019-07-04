@@ -131,7 +131,7 @@ class AuthService(
           None,
           None,
           identity,
-          email = Some(jwtPayload.email),
+          email = Some(""),
           affinityGroup = AffinityGroup.Agent,
           groupIdentifier = identity),
         None,
@@ -148,7 +148,7 @@ class AuthService(
           None,
           None,
           jwtPayload.username,
-          email = Some(jwtPayload.email),
+          email = Some(""),
           affinityGroup = AffinityGroup.Individual,
           groupIdentifier = jwtPayload.username
         ),
