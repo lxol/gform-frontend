@@ -16,28 +16,72 @@
 
 package uk.gov.hmrc.gform.graph
 
-import cats.data.EitherT
-import cats.syntax.applicative._
-import cats.syntax.either._
-import cats.syntax.eq._
-import cats.syntax.flatMap._
-import cats.syntax.functor._
+//import cats.data.EitherT
+//import cats.syntax.applicative._
+//import cats.syntax.either._
+//import cats.syntax.eq._
+//import cats.syntax.flatMap._
+//<<<<<<< HEAD
+//import cats.syntax.functor._
+//import cats.{ Applicative, Monad, MonadError }
+//=======
+//import cats.syntax.applicative._
+//import cats.syntax.traverse._
+//import cats.instances.string._
+//import cats.data.EitherT
+//import java.text.NumberFormat
+//import java.util.Locale
+//
+//import scala.language.higherKinds
+//import scala.util.{ Failure, Success, Try }
+//>>>>>>> master
+//import scalax.collection.Graph
+//import scalax.collection.GraphEdge._
+//import uk.gov.hmrc.gform.auth.models.MaterialisedRetrievals
+//import uk.gov.hmrc.gform.commons.{ BigDecimalUtil, NumberFormatUtil }
+//import uk.gov.hmrc.gform.gform.AuthContextPrepop
+//import uk.gov.hmrc.gform.graph.processor.UserCtxEvaluatorProcessor
+//import uk.gov.hmrc.gform.models.helpers.FormComponentHelper.extractMaxFractionalDigits
+//import uk.gov.hmrc.gform.sharedmodel.form.{ FormDataRecalculated, Seed, ThirdPartyData }
+//import uk.gov.hmrc.gform.sharedmodel.formtemplate._
+//import uk.gov.hmrc.gform.sharedmodel.graph.{ DependencyGraph, GraphNode, IncludeIfGN, SimpleGN }
+//import uk.gov.hmrc.gform.sharedmodel.{ IdNumberValue, RecalculatedTaxPeriodKey }
+//import uk.gov.hmrc.gform.submission.SubmissionRef
+//import uk.gov.hmrc.http.HeaderCarrier
+//
+//import scala.language.higherKinds
+
 import cats.{ Applicative, Monad, MonadError }
+import cats.syntax.eq._
+import cats.syntax.either._
+import cats.syntax.functor._
+import cats.syntax.flatMap._
+import cats.syntax.applicative._
+import cats.syntax.traverse._
+import cats.instances.string._
+import cats.data.EitherT
+import java.text.NumberFormat
+import java.util.Locale
+
+import scala.language.higherKinds
+import scala.util.{ Failure, Success, Try }
 import scalax.collection.Graph
+import scalax.collection.GraphPredef._
 import scalax.collection.GraphEdge._
-import uk.gov.hmrc.gform.auth.models.MaterialisedRetrievals
+import uk.gov.hmrc.gform.auth.models.{ AnonymousRetrievals, AuthenticatedRetrievals, MaterialisedRetrievals }
 import uk.gov.hmrc.gform.commons.{ BigDecimalUtil, NumberFormatUtil }
 import uk.gov.hmrc.gform.gform.AuthContextPrepop
 import uk.gov.hmrc.gform.graph.processor.UserCtxEvaluatorProcessor
-import uk.gov.hmrc.gform.models.helpers.FormComponentHelper.extractMaxFractionalDigits
-import uk.gov.hmrc.gform.sharedmodel.form.{ FormDataRecalculated, Seed, ThirdPartyData }
+import uk.gov.hmrc.gform.models.ExpandUtils
+import uk.gov.hmrc.gform.sharedmodel.{ AffinityGroupUtil, IdNumberValue, RecalculatedTaxPeriodKey }
+import uk.gov.hmrc.gform.sharedmodel.form.{ EnvelopeId, FormDataRecalculated, ThirdPartyData, ValidationResult }
 import uk.gov.hmrc.gform.sharedmodel.formtemplate._
 import uk.gov.hmrc.gform.sharedmodel.graph.{ DependencyGraph, GraphNode, IncludeIfGN, SimpleGN }
-import uk.gov.hmrc.gform.sharedmodel.{ IdNumberValue, RecalculatedTaxPeriodKey }
+import uk.gov.hmrc.gform.models.helpers.FormComponentHelper.extractMaxFractionalDigits
+import uk.gov.hmrc.gform.sharedmodel.AffinityGroupUtil._
 import uk.gov.hmrc.gform.submission.SubmissionRef
 import uk.gov.hmrc.http.HeaderCarrier
 
-import scala.language.higherKinds
 
 sealed trait RecalculationOp extends Product with Serializable
 
@@ -358,6 +402,11 @@ class Evaluator[F[_]: Monad](
         if (isHidden(fc.toFieldId, visSet)) MaybeConvertibleHidden(defaultF, fc.toFieldId)
         else sum(visSet, fcId, value, dataLookup, retrievals, formTemplate, thirdPartyData, seed)
       case Sum(_) => NonConvertible(RecalculationOp.noChange.pure[F])
+      case Else(f1, f2) =>
+        val f: Expr => Convertible[F] =
+          eval(visSet, fcId, _, dataLookup, retrievals, formTemplate, thirdPartyData, seed)
+        Convertible.orElse(f(f1), f(f2))
+
       case Add(f1, f2) =>
         Converted(
           makeCalc(
@@ -465,10 +514,26 @@ sealed trait Computable extends Product with Serializable
 case class Computed(x: BigDecimal) extends Computable
 case object NonComputable extends Computable
 
-sealed trait Convertible[F[_]]
+sealed trait Convertible[F[_]] extends Product with Serializable
+
+case class Nested[F[_]](convertible: F[Convertible[F]]) extends Convertible[F]
+case class Converted[F[_]](computable: F[Computable]) extends Convertible[F]
+case class NonConvertible[F[_]](str: F[RecalculationOp]) extends Convertible[F]
+case class MaybeConvertible[F[_]](str: F[String]) extends Convertible[F]
+case class MaybeConvertibleHidden[F[_]: Applicative](str: F[String], fcId: FormComponentId) extends Convertible[F] {
+  def visible[A](formTemplate: FormTemplate, f: String => Option[A]): F[Option[A]] = {
+    val lookup = formTemplate.expandFormTemplateFull.formComponentsLookupFull
+    val maybeFc: Option[FormComponent] = lookup.get(fcId).filter {
+      case IsChoice(_) => false
+      case _           => true
+    }
+    val fNone: F[Option[A]] = Option.empty[A].pure[F]
+    maybeFc.fold(fNone)(Function.const(str.map(f)))
+  }
+}
 
 object Convertible {
-  def asString[F[_]: Applicative](convertible: Convertible[F], formTemplate: FormTemplate): F[Option[RecalculationOp]] =
+  def asString[F[_]: Monad](convertible: Convertible[F], formTemplate: FormTemplate): F[Option[RecalculationOp]] =
     convertible match {
       case Converted(computable) =>
         computable.map {
@@ -478,15 +543,41 @@ object Convertible {
       case MaybeConvertible(str)            => str.map(a => Some(RecalculationOp.newValue(a)))
       case m @ MaybeConvertibleHidden(_, _) => m.visible(formTemplate, a => Some(RecalculationOp.newValue(a)))
       case NonConvertible(str)              => str.map(Some.apply)
+      case Nested(convertible)              => convertible.flatMap(a => asString(a, formTemplate))
     }
 
-  def convert[F[_]: Applicative](convertible: Convertible[F], formTemplate: FormTemplate): F[Option[BigDecimal]] =
+  def orElse[F[_]: Monad](leftConvertible: Convertible[F], rightConvertible: Convertible[F]): Convertible[F] =
+    leftConvertible match {
+      case Converted(computable) =>
+        Nested(computable.map {
+          case NonComputable => rightConvertible
+          case Computed(bd)  => leftConvertible
+        })
+      case MaybeConvertible(str) =>
+        Nested(str.map { s =>
+          if (s.isEmpty) rightConvertible else leftConvertible
+        })
+      case MaybeConvertibleHidden(str, _) =>
+        Nested(str.map { s =>
+          if (s.isEmpty || s === "0") rightConvertible else leftConvertible // 0 is special case in MaybeConvertibleHidden denoting field is hidden
+        })
+      case NonConvertible(str) =>
+        Nested(str.map {
+          case NewValue("") => rightConvertible
+          case NoChange     => rightConvertible
+          case _            => leftConvertible
+        })
+      case n @ Nested(convertible) => n
+    }
+
+  def convert[F[_]: Monad](convertible: Convertible[F], formTemplate: FormTemplate): F[Option[BigDecimal]] =
     convertible match {
       case Converted(computable) =>
         computable.map { case NonComputable => None; case Computed(bd) => Some(bd) }
       case MaybeConvertible(str)            => str.map(BigDecimalUtil.toBigDecimalSafe)
       case m @ MaybeConvertibleHidden(_, _) => m.visible(formTemplate, BigDecimalUtil.toBigDecimalSafe)
       case NonConvertible(_)                => Option.empty[BigDecimal].pure[F]
+      case Nested(convertible)              => convertible.flatMap(a => convert(a, formTemplate))
     }
 
   def round[F[_]: Monad](
@@ -499,19 +590,4 @@ object Convertible {
         RecalculationOp.newValue(NumberFormatUtil.roundAndFormat(bd, scale, roundingMode)).pure[F]
       case None => Convertible.asString(convertible, formTemplate).map(_.getOrElse(RecalculationOp.noChange))
     }
-}
-
-case class Converted[F[_]](computable: F[Computable]) extends Convertible[F]
-case class NonConvertible[F[_]](str: F[RecalculationOp]) extends Convertible[F]
-case class MaybeConvertible[F[_]](str: F[String]) extends Convertible[F]
-case class MaybeConvertibleHidden[F[_]: Applicative](str: F[String], fcId: FormComponentId) extends Convertible[F] {
-  def visible[A](formTemplate: FormTemplate, f: String => Option[A]): F[Option[A]] = {
-    val lookup = formTemplate.expandFormTemplateFull.formComponentsLookupFull
-    val maybeFc: Option[FormComponent] = lookup.get(fcId).filter {
-      case IsChoice(_) => false
-      case _           => true
-    }
-    val fNone: F[Option[A]] = (None: Option[A]).pure[F]
-    maybeFc.fold(fNone)(Function.const(str.map(f)))
-  }
 }
