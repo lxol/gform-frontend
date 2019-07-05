@@ -74,14 +74,13 @@ import uk.gov.hmrc.gform.gform.AuthContextPrepop
 import uk.gov.hmrc.gform.graph.processor.UserCtxEvaluatorProcessor
 import uk.gov.hmrc.gform.models.ExpandUtils
 import uk.gov.hmrc.gform.sharedmodel.{ AffinityGroupUtil, IdNumberValue, RecalculatedTaxPeriodKey }
-import uk.gov.hmrc.gform.sharedmodel.form.{ EnvelopeId, FormDataRecalculated, ThirdPartyData, ValidationResult }
+import uk.gov.hmrc.gform.sharedmodel.form.{ FormDataRecalculated, Seed, ThirdPartyData, ValidationResult }
 import uk.gov.hmrc.gform.sharedmodel.formtemplate._
 import uk.gov.hmrc.gform.sharedmodel.graph.{ DependencyGraph, GraphNode, IncludeIfGN, SimpleGN }
 import uk.gov.hmrc.gform.models.helpers.FormComponentHelper.extractMaxFractionalDigits
 import uk.gov.hmrc.gform.sharedmodel.AffinityGroupUtil._
 import uk.gov.hmrc.gform.submission.SubmissionRef
 import uk.gov.hmrc.http.HeaderCarrier
-
 
 sealed trait RecalculationOp extends Product with Serializable
 
