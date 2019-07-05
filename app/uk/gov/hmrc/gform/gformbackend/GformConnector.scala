@@ -39,16 +39,6 @@ import scala.concurrent.{ ExecutionContext, Future }
   */
 class GformConnector(ws: WSHttp, baseUrl: String) {
 
-  //TODO: MK remove this
-//  def saveAssumedIdentity(
-//    assumedIdentity: AssumedIdentity)(implicit hc: HeaderCarrier, ec: ExecutionContext): Future[HttpResponse] =
-//    ws.POST[AssumedIdentity, HttpResponse](s"$baseUrl/ofsted-admin", assumedIdentity, Seq())
-//
-//  def getAssumedIdentity(uuid: String)(implicit hc: HeaderCarrier, ec: ExecutionContext): Future[Option[String]] =
-//    ws.GET[String](s"$baseUrl/ofsted-admin/$uuid").map(Some(_)).recover {
-//      case e: NotFoundException => None
-//    }
-
   /******form*******/
   //TODO: remove userId since this information will be passed using HeaderCarrier
   def newForm(formTemplateId: FormTemplateId, userId: UserId, accessCode: Option[AccessCode])(

@@ -28,28 +28,9 @@ import scala.concurrent.Future
 
 class OfstedAdminController(appConfig: AppConfig, gformConnector: GformConnector, auth: AuthenticatedRequestActions)
     extends FrontendController {
-
-  //TODO: clean up and remove all commented out code
   def adminReview(formTemplateId: FormTemplateId, assumedIdentity: String, redirectUri: String): Action[AnyContent] =
     auth.asyncAlbAuth(formTemplateId, assumedIdentity) { implicit request => implicit l => cache =>
-//      val formReview = FormReview(formTemplateId.value, assumedId, redirectUri)
       Logger.info(s"Admin is authorized: redirecting admin to following URI [$redirectUri]...")
-//      val uuid = UUID.randomUUID().toString
-//      val ai = AssumedIdentity(uuid, formReview.assumedIdentity)
-//
       Future.successful(Redirect(redirectUri).withSession("assumed-identity" -> assumedIdentity))
-
-//      gformConnector.saveAssumedIdentity(AssumedIdentity(uuid, formReview.assumedIdentity)).map { res =>
-//        res.status match {
-//          case 200 => {
-//            Logger.info(s"Redirecting user after successfully saving assumed identity to : [$fullUrl | $uuid]")
-//            Redirect(fullUrl).withSession("assumed-identity" -> uuid)
-//          }
-//          case _ => {
-//            Logger.error(s"Failed to save assumed identity, HTTP Response from backend call: [${res.toString}]")
-//            BadRequest("Unable to save assumed identity")
-//          }
-//        }
-//      }
     }
 }
