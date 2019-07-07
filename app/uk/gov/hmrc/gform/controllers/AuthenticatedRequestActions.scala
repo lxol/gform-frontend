@@ -17,39 +17,32 @@
 package uk.gov.hmrc.gform
 package controllers
 
+import java.util.{ Base64, UUID }
+
 import cats.data.NonEmptyList
 import cats.instances.future._
 import cats.syntax.applicative._
-import java.util.{ Base64, UUID }
-
 import play.api.Logger
 import play.api.http.HeaderNames
 import play.api.i18n.{ I18nSupport, Lang, Langs }
-import play.api.libs.json.{ JsError, JsSuccess, JsValue, Json }
+import play.api.libs.json.{ JsDefined, JsUndefined, JsValue, Json }
 import play.api.mvc.Results._
 import play.api.mvc._
-
-import scala.concurrent.ExecutionContext
-import uk.gov.hmrc.auth.core.{ AuthConnector => _, _ }
+import uk.gov.hmrc.auth.core.authorise.Predicate
+import uk.gov.hmrc.auth.core.retrieve.v2._
+import uk.gov.hmrc.auth.core.retrieve.{ Retrievals => _, _ }
+import uk.gov.hmrc.auth.core.{ AffinityGroup, AuthConnector => _, _ }
 import uk.gov.hmrc.gform.auth._
 import uk.gov.hmrc.gform.auth.models._
 import uk.gov.hmrc.gform.config.{ AppConfig, FrontendAppConfig }
 import uk.gov.hmrc.gform.gformbackend.GformConnector
-import uk.gov.hmrc.gform.sharedmodel.form.{ Form, FormId, UserData }
+import uk.gov.hmrc.gform.sharedmodel._
+import uk.gov.hmrc.gform.sharedmodel.form.{ Form, FormId }
 import uk.gov.hmrc.gform.sharedmodel.formtemplate.{ Enrolment => _, _ }
 import uk.gov.hmrc.http.{ HeaderCarrier, SessionKeys }
 import uk.gov.hmrc.play.HeaderCarrierConverter
-import uk.gov.hmrc.auth.core.retrieve.{ Retrievals => _, _ }
-import uk.gov.hmrc.auth.core.retrieve.v2._
-import uk.gov.hmrc.auth.core.authorise.Predicate
-import uk.gov.hmrc.gform.sharedmodel._
-import uk.gov.hmrc.auth.core.AffinityGroup
-import uk.gov.hmrc.gform.ofsted.FormReview
 
-import scala.concurrent.Future
-import uk.gov.hmrc.http.HeaderCarrier
-import uk.gov.hmrc.play.HeaderCarrierConverter
-
+import scala.concurrent.{ ExecutionContext, Future }
 import scala.util.{ Failure, Success, Try }
 
 class AuthenticatedRequestActions(
@@ -170,7 +163,7 @@ class AuthenticatedRequestActions(
   def asyncAlbAuth(formTemplateId: FormTemplateId, assumedIdentity: String)(
     f: Request[AnyContent] => LangADT => AuthCacheWithoutForm => Future[Result]): Action[AnyContent] =
     Action.async { implicit request =>
-      Logger.info("Starting admin authorization check...")
+      Logger.info("AWS ALB: Authorizing admin...")
       for {
         formTemplate <- gformConnector.getFormTemplate(formTemplateId)
         authResult   <- albAuthorised(request, assumedIdentity)
@@ -192,8 +185,8 @@ class AuthenticatedRequestActions(
       case (header, value) if header == "X-Amzn-Oidc-Data" => value
     }
 
-    Logger.info(s"Performing ALB authorization with following parameters: ALB JWT ${encodedJWT
-      .getOrElse("No ALB JWT")} | IDP URL is ${appConfig.albAdminIssuerUrl}")
+    Logger.info(s"AWS ALB: JWT -> [${encodedJWT.getOrElse("No ALB JWT")}]")
+    Logger.info(s"AWS ALB: IDP URL -> [${appConfig.albAdminIssuerUrl}]")
 
     encodedJWT.fold(notAuthorized) { jwt =>
       jwt.split("\\.") match {
@@ -201,31 +194,58 @@ class AuthenticatedRequestActions(
           val payloadJson = new String(decoder.decode(payload))
           Try(Json.parse(payloadJson)) match {
             case Success(json) => {
-              Json.fromJson[AdminJwtPayload](json).asOpt match {
-                case Some(jwtPayload) if jwtPayload.iss == appConfig.albAdminIssuerUrl => {
-                  Logger.info(s"Admin is ${jwtPayload.iss}")
-                  AuthSuccessful(awsAlbAuthenticatedRetrieval(jwtPayload, assumedIdentity)).pure[Future]
+              Logger.debug(s"AWS ALB: JWT payload: [${json.toString()}]")
+              isAdmin(json) match {
+                case Some(isAnAdmin) if isAnAdmin =>
+                  AuthSuccessful(
+                    awsAlbAuthenticatedRetrieval(Json.fromJson[AdminJwtPayload](json).get, assumedIdentity))
+                    .pure[Future]
+                case None => {
+                  Logger.info(s"AWS ALB: Cannot determine type of user [${json.toString()}]")
+                  AuthBlocked("Not authorized").pure[Future]
                 }
-                case None => AuthBlocked("Not authorized").pure[Future]
               }
             }
-            case Failure(_) => {
-              Logger.error(s"Corrupt JWT received from AWS ALB: payload is not a json: $payloadJson")
+            case Failure(_) =>
+              Logger.error(
+                s"AWS ALB: Corrupt JWT received from AWS ALB: payload is not a JSON structure: [$payloadJson]")
               notAuthorized
-            }
           }
-        case _ => {
-          Logger.error(s"Corrupt JWT received from AWS ALB: [$jwt]")
+        case _ =>
+          Logger.error(s"AWS ALB: Corrupt JWT received from AWS ALB: [$jwt]")
           notAuthorized
-        }
       }
     }
   }
 
+  private def isAdmin(payload: JsValue): Option[Boolean] =
+    payload \ "iss" match {
+      case JsDefined(issuer) =>
+        issuer.asOpt[String] match {
+          case Some(iss) if iss == appConfig.albAdminIssuerUrl => {
+            Logger.info(s"AWS ALB: issuer is an admin: [$iss]")
+            Some(true)
+          }
+          case Some(iss) if iss != appConfig.albAdminIssuerUrl => {
+            Logger.info(s"AWS ALB: issuer is not an admin: [$iss]")
+            Some(false)
+          }
+          case None => {
+            Logger.error("AWS ALB: issuer not a string value in JWT")
+            None
+          }
+        }
+      case JsUndefined() => {
+        Logger.error("AWS ALB: issuer is not defined in the JWT")
+        None
+      }
+    }
+
   private def awsAlbAuthenticatedRetrieval(
     jwtPayload: AdminJwtPayload,
     assumedIdentity: String): AuthenticatedRetrievals = {
-    Logger.info(s"Make admin assume the following identity: $assumedIdentity")
+
+    Logger.info(s"AWS ALB: Admin will assume the following identity: $assumedIdentity")
 
     AuthenticatedRetrievals(
       OneTimeLogin,
@@ -249,8 +269,12 @@ class AuthenticatedRequestActions(
     f: Request[AnyContent] => LangADT => AuthCacheWithForm => Future[Result]): Action[AnyContent] =
     Action.async { implicit request =>
       implicit val l: LangADT = getCurrentLanguage(request)
+
       val assumedIdentity: Option[String] = request.session.get("assumed-identity")
-      Logger.info(s"AWS ALB AUTH assumed identity token is : ${assumedIdentity.getOrElse("No assumed identity token")}")
+
+      Logger.info(
+        s"AWS ALB: Assumed identity from session is : ${assumedIdentity.getOrElse("No assumed identity token")}")
+
       for {
         formTemplate <- gformConnector.getFormTemplate(formTemplateId)
         authResult <- authService

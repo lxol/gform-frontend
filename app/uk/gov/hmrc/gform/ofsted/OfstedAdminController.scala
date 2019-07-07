@@ -28,9 +28,10 @@ import scala.concurrent.Future
 
 class OfstedAdminController(appConfig: AppConfig, gformConnector: GformConnector, auth: AuthenticatedRequestActions)
     extends FrontendController {
+
   def adminReview(formTemplateId: FormTemplateId, assumedIdentity: String, redirectUri: String): Action[AnyContent] =
     auth.asyncAlbAuth(formTemplateId, assumedIdentity) { implicit request => implicit l => cache =>
-      Logger.info(s"Admin is authorized: redirecting admin to following URI [$redirectUri]...")
-      Future.successful(Redirect(redirectUri).withSession("assumed-identity" -> assumedIdentity))
+      Logger.info(s"AWS ALB: Admin is authorized: redirecting admin to following URI [$redirectUri]")
+      Future.successful(Redirect(redirectUri).withSession(request.session + ("assumed-identity" -> assumedIdentity)))
     }
 }

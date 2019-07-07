@@ -20,7 +20,7 @@ import java.util.Base64
 
 import cats.implicits._
 import play.api.Logger
-import play.api.libs.json.Json
+import play.api.libs.json.{ JsDefined, JsLookupResult, JsResult, JsUndefined, JsValue, Json }
 import uk.gov.hmrc.auth.core.authorise._
 import uk.gov.hmrc.auth.core.retrieve.OneTimeLogin
 import uk.gov.hmrc.auth.core.{ AffinityGroup, AuthConnector => _, _ }
@@ -76,15 +76,18 @@ class AuthService(
         performAgent(agentAccess, formTemplate, ggAuthorised(RecoverAuthResult.noop), ifSuccessPerformEnrolment)
     }
 
+  //TODO: All the AWS ALB needs to be refactored out into a common module as the same logic is duplicated in two places - see AuthenticatedRequestActions
   private val notAuthorized: AuthResult = AuthBlocked("You are not authorized to access this service")
   private val decoder = Base64.getDecoder
 
   private def performAWSALBAuth(assumedIdentity: Option[String])(implicit hc: HeaderCarrier): AuthResult = {
+    Logger.info("AWS ALB: Start authorization...")
+
     val encodedJWT: Option[String] = hc.otherHeaders.collectFirst {
       case (header, value) if header === "X-Amzn-Oidc-Data" => value
     }
 
-    Logger.info(s"ALB JWT: ${encodedJWT.getOrElse("No ALB JWT")}")
+    Logger.info(s"AWS ALB: JWT -> [${encodedJWT.getOrElse("No ALB JWT")}]")
 
     encodedJWT.fold(notAuthorized) { jwt =>
       jwt.split("\\.") match {
@@ -92,22 +95,53 @@ class AuthService(
           val payloadJson = new String(decoder.decode(payload))
           Try(Json.parse(payloadJson)) match {
             case Success(json) => {
-              Logger.debug(s"JWT Payload is [${json.toString()}]")
-              Json.fromJson[JwtPayload](json).asOpt match {
-                case Some(jwtPayload) => AuthSuccessful(awsAlbAuthenticatedRetrieval(jwtPayload, assumedIdentity))
-                case None             => AuthBlocked("Not authorized")
+              Logger.debug(s"AWS ALB: JWT payload: [${json.toString()}]")
+              isAdmin(json) match {
+                case Some(isAnAdmin) if isAnAdmin =>
+                  AuthSuccessful(
+                    awsAlbAuthenticatedRetrieval2(Json.fromJson[AdminJwtPayload](json).get, assumedIdentity))
+                case Some(isAnAdmin) if !isAnAdmin =>
+                  AuthSuccessful(awsAlbAuthenticatedRetrieval(Json.fromJson[JwtPayload](json).get, assumedIdentity))
+                case None => {
+                  Logger.info(s"AWS ALB: Cannot determine type of user [${json.toString()}]")
+                  AuthBlocked("Not authorized")
+                }
               }
             }
             case Failure(_) =>
-              Logger.error(s"Corrupt JWT received from AWS ALB: payload is not a json: $payloadJson")
+              Logger.error(
+                s"AWS ALB: Corrupt JWT received from AWS ALB: payload is not a JSON structure: [$payloadJson]")
               notAuthorized
           }
         case _ =>
-          Logger.error(s"Corrupt JWT received from AWS ALB: [$jwt]")
+          Logger.error(s"AWS ALB: Corrupt JWT received from AWS ALB: [$jwt]")
           notAuthorized
       }
     }
   }
+
+  private def isAdmin(payload: JsValue): Option[Boolean] =
+    payload \ "iss" match {
+      case JsDefined(issuer) =>
+        issuer.asOpt[String] match {
+          case Some(iss) if iss == appConfig.albAdminIssuerUrl => {
+            Logger.info(s"AWS ALB: issuer is an admin: [$iss]")
+            Some(true)
+          }
+          case Some(iss) if iss != appConfig.albAdminIssuerUrl => {
+            Logger.info(s"AWS ALB: issuer is not an admin: [$iss]")
+            Some(false)
+          }
+          case None => {
+            Logger.error("AWS ALB: issuer not a string value in JWT")
+            None
+          }
+        }
+      case JsUndefined() => {
+        Logger.error("AWS ALB: issuer is not defined in the JWT")
+        None
+      }
+    }
 
   private def awsAlbAuthenticatedRetrieval(
     jwtPayload: JwtPayload,
@@ -119,7 +153,55 @@ class AuthService(
         case None       => jwtPayload.username
       }
 
-      Logger.info(s"Admin will assume the following user identity : [$identity]")
+      Logger.info(s"AWS ALB: Admin will assume the following user identity : [$identity]")
+
+      AuthenticatedRetrievals(
+        OneTimeLogin,
+        Enrolments(Set.empty),
+        Some(AffinityGroup.Agent),
+        Some(identity),
+        Some(identity),
+        UserDetails(
+          None,
+          None,
+          identity,
+          email = Some(""),
+          affinityGroup = AffinityGroup.Agent,
+          groupIdentifier = identity),
+        None,
+        None
+      )
+    } else {
+      AuthenticatedRetrievals(
+        OneTimeLogin,
+        Enrolments(Set.empty),
+        Some(AffinityGroup.Individual),
+        Some(jwtPayload.username),
+        Some(jwtPayload.username),
+        UserDetails(
+          None,
+          None,
+          jwtPayload.username,
+          email = Some(""),
+          affinityGroup = AffinityGroup.Individual,
+          groupIdentifier = jwtPayload.username
+        ),
+        None,
+        None
+      )
+    }
+
+  private def awsAlbAuthenticatedRetrieval2(
+    jwtPayload: AdminJwtPayload,
+    assumedIdentity: Option[String]): AuthenticatedRetrievals =
+    if (jwtPayload.iss == appConfig.albAdminIssuerUrl) {
+
+      val identity = assumedIdentity match {
+        case Some(user) => user
+        case None       => jwtPayload.username
+      }
+
+      Logger.info(s"AWS ALB: Admin will assume the following user identity : [$identity]")
 
       AuthenticatedRetrievals(
         OneTimeLogin,
