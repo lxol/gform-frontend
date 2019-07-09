@@ -23,8 +23,9 @@ import play.api.i18n.Messages
 import uk.gov.hmrc.domain.Nino
 import uk.gov.hmrc.emailaddress.EmailAddress
 import uk.gov.hmrc.gform.auth.models.MaterialisedRetrievals
+import uk.gov.hmrc.gform.lookup.LookupOptions
 import uk.gov.hmrc.gform.sharedmodel.LangADT
-import uk.gov.hmrc.gform.lookup.{ AjaxLookup, LookupId, LookupLabel, LookupRegistry, RadioLookup }
+import uk.gov.hmrc.gform.lookup.{ AjaxLookup, LookupInfo, LookupLabel, LookupRegistry, RadioLookup }
 import uk.gov.hmrc.gform.sharedmodel.form.FormDataRecalculated
 import uk.gov.hmrc.gform.sharedmodel.formtemplate._
 import uk.gov.hmrc.gform.validation.ValidationUtil.ValidatedType
@@ -49,7 +50,7 @@ object ComponentValidator {
     register: Register,
     lookupLabel: LookupLabel)(implicit messages: Messages, l: LangADT) = {
 
-    def existsLabel(options: Map[LookupLabel, LookupId]) =
+    def existsLabel(options: LookupOptions) =
       if (options.contains(lookupLabel))
         validationSuccess
       else {
@@ -165,7 +166,8 @@ object ComponentValidator {
   private def textValidationWithConstraints(fieldValue: FormComponent, value: String, min: Int, max: Int)(
     implicit messages: Messages,
     l: LangADT) = {
-    val ValidText = """[A-Za-z0-9\(\)\,\'\-\.\r\s\£\\n\+\;\:\*\?\=\/\&\!\@\#\$\€\`\~\"\<\>\_\§\±\[\]\{\}]+""".r
+    val ValidText =
+      """[A-Za-z0-9\(\)\,\'\’\“\”\%\•\-\.\r\s\£\\n\+\;\:\*\?\=\/\&\!\@\#\$\€\`\~\"\<\>\_\§\±\[\]\{\}]+""".r
     val messageKey = "generic.longText.error.pattern"
     sharedTextComponentValidator(fieldValue, value, min, max, ValidText, messageKey)
   }
@@ -256,11 +258,8 @@ object ComponentValidator {
     sharedTextComponentValidator(fieldValue, value, min, max, ValidShortText, messageKey)
   }
 
-  private def textValidation(fieldValue: FormComponent, value: String)(implicit messages: Messages, l: LangADT) = {
-    val ValidText = """[A-Za-z0-9\(\)\,\'\-\.\r\s\£\\n\+\;\:\*\?\=\/\&\!\@\#\$\€\`\~\"\<\>\_\§\±\[\]\{\}]+""".r
-    val messageKey = "generic.longText.error.pattern"
-    sharedTextComponentValidator(fieldValue, value, 0, 100000, ValidText, messageKey)
-  }
+  private def textValidation(fieldValue: FormComponent, value: String)(implicit messages: Messages, l: LangADT) =
+    textValidationWithConstraints(fieldValue, value, 0, 100000)
 
   def validateChoice(fieldValue: FormComponent)(
     data: FormDataRecalculated)(implicit messages: Messages, l: LangADT): ValidatedType[Unit] = {
