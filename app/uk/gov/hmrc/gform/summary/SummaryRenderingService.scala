@@ -135,7 +135,7 @@ class SummaryRenderingService(
                  cache.formTemplate,
                  cache.retrievals,
                  cache.form.thirdPartyData,
-                 cache.form.envelopeId)
+                 cache.form.seed)
       envelope <- envelopeF
       (v, _)   <- validationService.validateForm(cache, envelope, cache.retrievals)
     } yield

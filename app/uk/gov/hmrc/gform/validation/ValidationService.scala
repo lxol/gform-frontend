@@ -213,7 +213,7 @@ class ValidationService(
                cache.formTemplate,
                retrievals,
                cache.form.thirdPartyData,
-               cache.form.envelopeId
+               cache.form.seed
              )
       allSections = RepeatingComponentService.getAllSections(cache.formTemplate, data)
       sections = filterSection(allSections, data)
@@ -228,6 +228,7 @@ class ValidationService(
                  validateFormComponents(
                    allFields,
                    section,
+                   cache.form.seed,
                    cache.form.envelopeId,
                    retrievals,
                    cache.form.thirdPartyData,
