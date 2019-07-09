@@ -32,8 +32,7 @@ import uk.gov.hmrc.gform.models.ProcessDataService
 import uk.gov.hmrc.gform.nonRepudiation.NonRepudiationHelpers
 import uk.gov.hmrc.gform.ofsted.OfstedAdminController
 import uk.gov.hmrc.gform.playcomponents.PlayBuiltInsModule
-import uk.gov.hmrc.gform.sharedmodel.LangADT
-import uk.gov.hmrc.gform.sharedmodel.formtemplate.Register
+import uk.gov.hmrc.gform.summary.SummaryRenderingService
 import uk.gov.hmrc.gform.summarypdf.PdfGeneratorModule
 import uk.gov.hmrc.gform.validation.ValidationModule
 import uk.gov.hmrc.gform.wshttp.WSHttpModule
@@ -91,6 +90,14 @@ class GformModule(
     playBuiltInsModule.langs
   )
 
+  val summaryRenderingService = new SummaryRenderingService(
+    playBuiltInsModule.i18nSupport,
+    fileUploadModule.fileUploadService,
+    graphModule.recalculation,
+    validationModule.validationService,
+    configModule.frontendAppConfig
+  )
+
   val summaryController: SummaryController = new SummaryController(
     playBuiltInsModule.i18nSupport,
     controllersModule.authenticatedRequestActions,
@@ -100,7 +107,8 @@ class GformModule(
     gformBackendModule.gformConnector,
     configModule.frontendAppConfig,
     controllersModule.errResponder,
-    graphModule.recalculation
+    graphModule.recalculation,
+    summaryRenderingService
   )
 
   val acknowledgementController: AcknowledgementController = new AcknowledgementController(
@@ -108,7 +116,7 @@ class GformModule(
     controllersModule.authenticatedRequestActions,
     pdfGeneratorModule.pdfGeneratorService,
     sectionRenderingService,
-    summaryController,
+    summaryRenderingService,
     authModule.authService,
     gformBackendModule.gformConnector,
     new NonRepudiationHelpers(auditingModule)
@@ -132,7 +140,7 @@ class GformModule(
     controllersModule.authenticatedRequestActions,
     gformBackendModule.gformConnector,
     auditingModule.auditService,
-    summaryController,
+    summaryRenderingService,
     pdfGeneratorModule.pdfGeneratorService,
     sectionRenderingService,
     validationModule.validationService,
