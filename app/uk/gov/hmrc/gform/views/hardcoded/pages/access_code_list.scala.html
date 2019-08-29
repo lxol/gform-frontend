@@ -53,7 +53,18 @@
     @heading
   </h1>
 
-  <p><a class="button" role="button" href="@{uk.gov.hmrc.gform.gform.routes.NewFormController.showAccessCode(formTemplate._id)}">Start a new @formCat</a></p>
+  <form action="@{uk.gov.hmrc.gform.gform.routes.NewFormController.newFormPost(formTemplate._id)}" method="POST" novalidate="novalidate">
+    @{CSRF.formField}
+    <input
+      id="@{AccessCodePage.optionKey}-@{AccessCodePage.optionAccess}"
+      type="hidden"
+      name="@{AccessCodePage.optionKey}"
+      value="@{AccessCodePage.optionNew}"
+    >
+    <div class="form-group">
+      <input type="submit" class="button" value="@{messages("accessCode.startNew", formCat)}" />
+    </div>
+  </form>
 
   <p>
     @messages("accessCodeLinks.p1", formCat)
