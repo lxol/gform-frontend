@@ -338,6 +338,10 @@ class Evaluator[F[_]: Monad](
     }
   }
 
+  def evalFormCtx(visSet: Set[GraphNode], fc: FormCtx, dataLookup: Data)(implicit hc: HeaderCarrier): Convertible[F] =
+    if (isHidden(fc.toFieldId, visSet)) MaybeConvertibleHidden(defaultF, fc.toFieldId)
+    else getSubmissionData(dataLookup, fc.toFieldId)
+
   def eval(
     visSet: Set[GraphNode],
     fcId: FormComponentId,
@@ -358,9 +362,7 @@ class Evaluator[F[_]: Monad](
         NonConvertible(eeittPrepop(eeitt, retrievals, formTemplate, hc).map(RecalculationOp.newValue))
       case SubmissionReference => NonConvertible(RecalculationOp.newValue(SubmissionRef(envelopeId).toString).pure[F])
       case Constant(fc)        => MaybeConvertible(fc.pure[F])
-      case fc @ FormCtx(_) =>
-        if (isHidden(fc.toFieldId, visSet)) MaybeConvertibleHidden(defaultF, fc.toFieldId)
-        else getSubmissionData(dataLookup, fc.toFieldId)
+      case fc: FormCtx         => evalFormCtx(visSet, fc, dataLookup)
       case Sum(fc @ FormCtx(value)) =>
         if (isHidden(fc.toFieldId, visSet)) MaybeConvertibleHidden(defaultF, fc.toFieldId)
         else sum(visSet, fcId, value, dataLookup, retrievals, formTemplate, thirdPartyData, envelopeId)

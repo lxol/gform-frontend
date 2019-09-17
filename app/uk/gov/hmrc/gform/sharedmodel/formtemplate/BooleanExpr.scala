@@ -25,8 +25,8 @@ import play.api.libs.json._
 
 import scala.language.higherKinds
 import uk.gov.hmrc.gform.auth.models.MaterialisedRetrievals
-import uk.gov.hmrc.gform.graph.{ Convertible, Evaluator, NewValue }
-import uk.gov.hmrc.gform.sharedmodel.form.{ EnvelopeId, ThirdPartyData, ValidationResult }
+import uk.gov.hmrc.gform.graph.{ Convertible, Evaluator, MaybeConvertible, NewValue, RecalculationOp }
+import uk.gov.hmrc.gform.sharedmodel.form.{ EnvelopeId, ThirdPartyData }
 import uk.gov.hmrc.gform.sharedmodel.graph.GraphNode
 import uk.gov.hmrc.http.HeaderCarrier
 
@@ -42,6 +42,7 @@ final case class Or(left: BooleanExpr, right: BooleanExpr) extends BooleanExpr
 final case class And(left: BooleanExpr, right: BooleanExpr) extends BooleanExpr
 final case object IsTrue extends BooleanExpr
 final case object IsFalse extends BooleanExpr
+final case class Includes(multiValueField: Expr, value: Expr) extends BooleanExpr
 
 object BooleanExpr {
   implicit val format: OFormat[BooleanExpr] = derived.oformat
@@ -100,6 +101,46 @@ class BooleanExprEval[F[_]: Monad](
           envelopeId)
     }
 
+    import shapeless.syntax.typeable._
+    import cats.syntax.traverse._
+    import cats.instances.option._
+    def includes(field: Expr, value: Expr): F[Boolean] = {
+      val options: F[List[String]] =
+        field
+          .cast[FormCtx]
+          .flatTraverse { v =>
+            Convertible.asString(evaluator.evalFormCtx(visSet, v, data), formTemplate)
+          }
+          .map(_.flatMap(_.cast[NewValue].map(_.value)))
+          .map {
+            case Some(v: String) => v.split(",").map(_.trim).filterNot(_.isEmpty).toList
+            case None            => Nil
+          }
+
+      val testValue: F[Option[String]] =
+        Convertible
+          .asString(
+            evaluator.eval(
+              visSet,
+              FormComponentId("dummy"),
+              value,
+              data,
+              retrievals,
+              formTemplate,
+              thirdPartyData,
+              envelopeId),
+            formTemplate)
+          .map(_.flatMap(_.cast[NewValue].map(_.value)))
+
+      for {
+        os <- options
+        tv <- testValue
+      } yield
+        tv.fold(false) { v =>
+          os.contains(v)
+        }
+    }
+
     expr match {
       case Equals(field1, field2)              => compare(field1, field2, _ == _, _ == _, formTemplate)
       case NotEquals(field1, field2)           => compare(field1, field2, _ != _, _ != _, formTemplate)
@@ -112,6 +153,7 @@ class BooleanExprEval[F[_]: Monad](
       case And(expr1, expr2)                   => for { e1 <- loop(expr1); e2 <- loop(expr2) } yield e1 & e2
       case IsTrue                              => true.pure[F]
       case IsFalse                             => false.pure[F]
+      case Includes(ctx, value)                => includes(ctx, value)
     }
   }
 

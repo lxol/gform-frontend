@@ -196,6 +196,30 @@ class BooleanExprSpec extends Spec with GraphSpec {
     }
   }
 
+  val includesCombinations = Table(
+    ("Ctx value", "left argument", "right argument", "expected result"),
+    ("0", "number", "0", true),
+    ("0", "number", "1", false),
+    ("0,1 ", "number", "0", true),
+    ("0, 1", "number", "1", true),
+    ("0, 1", "number", "2", false)
+  )
+
+  forAll(includesCombinations) { (ctxValue, left, right, result) =>
+    new Test {
+      override val value = ctxValue
+      booleanExprEval
+        .isTrue(
+          Includes(FormCtx(left), Constant(right)),
+          rawDataFromBrowser,
+          authContext,
+          Set.empty,
+          ThirdPartyData.empty,
+          EnvelopeId(""),
+          ExampleData.formTemplate) shouldBe result
+    }
+  }
+
   trait Test extends ExampleData {
     def value: String
 
