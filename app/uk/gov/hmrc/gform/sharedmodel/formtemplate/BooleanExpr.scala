@@ -20,12 +20,13 @@ import cats.Monad
 import cats.syntax.functor._
 import cats.syntax.flatMap._
 import cats.syntax.applicative._
+import shapeless.syntax.typeable._
 import julienrf.json.derived
 import play.api.libs.json._
 
 import scala.language.higherKinds
 import uk.gov.hmrc.gform.auth.models.MaterialisedRetrievals
-import uk.gov.hmrc.gform.graph.{ Convertible, Evaluator, MaybeConvertible, NewValue, RecalculationOp }
+import uk.gov.hmrc.gform.graph.{ Convertible, Evaluator, NewValue }
 import uk.gov.hmrc.gform.sharedmodel.form.{ EnvelopeId, ThirdPartyData }
 import uk.gov.hmrc.gform.sharedmodel.graph.GraphNode
 import uk.gov.hmrc.http.HeaderCarrier
@@ -42,7 +43,7 @@ final case class Or(left: BooleanExpr, right: BooleanExpr) extends BooleanExpr
 final case class And(left: BooleanExpr, right: BooleanExpr) extends BooleanExpr
 final case object IsTrue extends BooleanExpr
 final case object IsFalse extends BooleanExpr
-final case class Includes(multiValueField: Expr, value: Expr) extends BooleanExpr
+final case class Includes(multiValueField: FormCtx, value: Expr) extends BooleanExpr
 
 object BooleanExpr {
   implicit val format: OFormat[BooleanExpr] = derived.oformat
@@ -101,16 +102,10 @@ class BooleanExprEval[F[_]: Monad](
           envelopeId)
     }
 
-    import shapeless.syntax.typeable._
-    import cats.syntax.traverse._
-    import cats.instances.option._
-    def includes(field: Expr, value: Expr): F[Boolean] = {
+    def includes(field: FormCtx, value: Expr): F[Boolean] = {
       val options: F[List[String]] =
-        field
-          .cast[FormCtx]
-          .flatTraverse { v =>
-            Convertible.asString(evaluator.evalFormCtx(visSet, v, data), formTemplate)
-          }
+        Convertible
+          .asString(evaluator.evalFormCtx(visSet, field, data), formTemplate)
           .map(_.flatMap(_.cast[NewValue].map(_.value)))
           .map {
             case Some(v: String) => v.split(",").map(_.trim).filterNot(_.isEmpty).toList
