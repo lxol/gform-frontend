@@ -293,7 +293,7 @@ sealed trait ExpressionResult extends Product with Serializable {
       _.asString(messages)
     )(
       _.address.mkString(", ")
-    )(_.value.toString)(_.list.map(_.stringRepresentation(typeInfo, messages)).mkString(", "))
+    )(_.value.toString)(_.list.map(_.stringRepresentation(typeInfo, messages)).filterNot(_ === "").mkString(", "))
 
   def addressRepresentation(typeInfo: TypeInfo): List[String] =
     fold[List[String]](_ => Nil)(_ => Nil)(_ => Nil)(_ => Nil)(_ => Nil)(_ => Nil)(_ => Nil)(
