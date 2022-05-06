@@ -30,7 +30,7 @@ import uk.gov.hmrc.gform.sharedmodel.SourceOrigin.OutOfDate
 import uk.gov.hmrc.gform.sharedmodel.form.{ QueryParamValue, QueryParams, ThirdPartyData }
 import uk.gov.hmrc.gform.sharedmodel.formtemplate.InternalLink.{ NewForm, NewFormForTemplate, NewSession, PageLink }
 import uk.gov.hmrc.gform.sharedmodel.formtemplate.OffsetUnit.{ Day, Month, Year }
-import uk.gov.hmrc.gform.sharedmodel.formtemplate.{ Add, Constant, Count, DataRetrieveCtx, DateCtx, DateExprWithOffset, DateFormCtxVar, DateValueExpr, Else, ExactDateExprValue, FormComponentId, FormCtx, FormPhase, FormTemplateId, IdentifierName, LangCtx, LinkCtx, OffsetYMD, PageId, ParamCtx, Period, PeriodExt, PeriodFn, PeriodValue, QueryParam, RoundingMode, SectionNumber, ServiceName, Sterling, UserCtx, UserField, UserFieldFunc }
+import uk.gov.hmrc.gform.sharedmodel.formtemplate.{ Add, Constant, Count, DataRetrieveCtx, DateCtx, DateExprWithOffset, DateFormCtxVar, DateValueExpr, Else, ExactDateExprValue, Expr, FormComponentId, FormCtx, FormPhase, FormTemplateId, IdentifierName, LangCtx, LinkCtx, OffsetYMD, PageId, ParamCtx, Period, PeriodExt, PeriodFn, PeriodValue, QueryParam, RoundingMode, SectionNumber, ServiceName, Sterling, Sum, UserCtx, UserField, UserFieldFunc }
 import uk.gov.hmrc.gform.sharedmodel._
 import uk.gov.hmrc.http.HeaderCarrier
 
@@ -357,9 +357,9 @@ class EvaluationResultsSpec extends Spec with TableDrivenPropertyChecks {
   it should "evaluate form component reference from outside, when they are in indexed pages (repeating page, ATL)" in {
 
     val table = Table(
-      ("typeInfo", "recData", "evaluationContext", "expectedResult", "scenario"),
+      ("typeInfo", "recData", "evaluationContext", "expectedResult", "exprMap", "scenario"),
       (
-        TypeInfo(FormCtx(FormComponentId("addToListNumField")), StaticTypeData(ExprType.number, None)),
+        TypeInfo(Sum(FormCtx(FormComponentId("addToListNumField"))), StaticTypeData(ExprType.number, None)),
         RecData[OutOfDate](
           VariadicFormData.create(
             (toModelComponentId("1_addToListQuestion"), VariadicValue.One("0")),
@@ -370,11 +370,14 @@ class EvaluationResultsSpec extends Spec with TableDrivenPropertyChecks {
         ),
         buildEvaluationContext(indexedComponentIds =
           List(
-            FormComponentId("1_addToListNumField").modelComponentId,
-            FormComponentId("2_addToListNumField").modelComponentId
+            FormComponentId("1_addToListNumField").modelComponentId //,
           )
         ),
-        ListResult(List(NumberResult(1), NumberResult(2))),
+        NumberResult(3),
+        Map[Expr, ExpressionResult](
+          FormCtx(FormComponentId("1_addToListNumField")) -> NumberResult(1),
+          FormCtx(FormComponentId("2_addToListNumField")) -> NumberResult(2)
+        ),
         "Ref to AddToList number field from outside ATL"
       ),
       (
@@ -394,6 +397,10 @@ class EvaluationResultsSpec extends Spec with TableDrivenPropertyChecks {
           )
         ),
         ListResult(List(StringResult("AAA"), StringResult("BBB"))),
+        Map[Expr, ExpressionResult](
+          FormCtx(FormComponentId("1_addToListStrField")) -> StringResult("AAA"),
+          FormCtx(FormComponentId("2_addToListStrField")) -> StringResult("BBB")
+        ),
         "Ref to AddToList string field from outside ATL"
       ),
       (
@@ -413,6 +420,10 @@ class EvaluationResultsSpec extends Spec with TableDrivenPropertyChecks {
           )
         ),
         ListResult(List(OptionResult(Seq("1")), OptionResult(Seq("0")))),
+        Map[Expr, ExpressionResult](
+          FormCtx(FormComponentId("1_addToListChoiceField")) -> OptionResult(Seq("1")),
+          FormCtx(FormComponentId("2_addToListChoiceField")) -> OptionResult(Seq("0"))
+        ),
         "Ref to AddToList string field from outside ATL"
       )
     )
@@ -422,9 +433,10 @@ class EvaluationResultsSpec extends Spec with TableDrivenPropertyChecks {
         recData: RecData[OutOfDate],
         evaluationContext: EvaluationContext,
         expectedResult: ExpressionResult,
+        exprMap: Map[Expr, ExpressionResult],
         _
       ) =>
-        EvaluationResults.empty
+        EvaluationResults(exprMap)
           .evalExpr(typeInfo, recData, booleanExprResolver, evaluationContext) shouldBe expectedResult
     }
   }
@@ -434,19 +446,33 @@ class EvaluationResultsSpec extends Spec with TableDrivenPropertyChecks {
       VariadicFormData.create(
         (toModelComponentId("1_addToListQuestion"), VariadicValue.One("0")),
         (toModelComponentId("2_addToListQuestion"), VariadicValue.One("1")),
+        (toModelComponentId("3_addToListQuestion"), VariadicValue.One("3")),
         (toModelComponentId("1_addToListField1"), VariadicValue.One("Hello")),
         (toModelComponentId("2_addToListField1"), VariadicValue.One("World"))
       )
     )
 
     val table = Table(
-      ("typeInfo", "recData", "evaluationContext", "expectedResult", "scenario"),
+      ("typeInfo", "recData", "evaluationContext", "expectedResult", "exprMap", "scenario"),
       (
         TypeInfo(Count(FormComponentId("addToListQuestion")), StaticTypeData(ExprType.number, None)),
         recData,
         evaluationContext,
         NumberResult(2),
+        Map.empty[Expr, ExpressionResult],
         "Ref to AddToList count in number field"
+      ),
+      (
+        TypeInfo(Sum(FormCtx(FormComponentId("addToListQuestion"))), StaticTypeData(ExprType.number, None)),
+        recData,
+        evaluationContext.copy(indexedComponentIds = List(toModelComponentId("1_addToListQuestion"))),
+        NumberResult(4),
+        Map[Expr, ExpressionResult](
+          FormCtx(FormComponentId("1_addToListQuestion")) -> NumberResult(0),
+          FormCtx(FormComponentId("2_addToListQuestion")) -> NumberResult(1),
+          FormCtx(FormComponentId("3_addToListQuestion")) -> NumberResult(3)
+        ),
+        "Ref to AddToList sum in number field"
       ),
       (
         TypeInfo(
@@ -460,6 +486,7 @@ class EvaluationResultsSpec extends Spec with TableDrivenPropertyChecks {
           )
         ),
         NumberResult(1),
+        Map.empty[Expr, ExpressionResult],
         "user enrolments count for service a and identifier b"
       ),
       (
@@ -470,6 +497,7 @@ class EvaluationResultsSpec extends Spec with TableDrivenPropertyChecks {
         recData,
         evaluationContext,
         NumberResult(123),
+        Map.empty[Expr, ExpressionResult],
         "convert param to Sterling"
       ),
       (
@@ -480,12 +508,20 @@ class EvaluationResultsSpec extends Spec with TableDrivenPropertyChecks {
         recData,
         evaluationContext,
         ExpressionResult.Invalid("Number - cannot convert 'foo' to number"),
+        Map.empty[Expr, ExpressionResult],
         "convert param to Sterling (fail when param is not a convertible to number)"
       )
     )
     forAll(table) {
-      (typeInfo: TypeInfo, recData: RecData[OutOfDate], evaluationContext, expectedResult: ExpressionResult, _) =>
-        EvaluationResults.empty
+      (
+        typeInfo: TypeInfo,
+        recData: RecData[OutOfDate],
+        evaluationContext,
+        expectedResult: ExpressionResult,
+        exprMap: Map[Expr, ExpressionResult],
+        _
+      ) =>
+        EvaluationResults(exprMap)
           .evalExpr(typeInfo, recData, booleanExprResolver, evaluationContext) shouldBe expectedResult
     }
   }
