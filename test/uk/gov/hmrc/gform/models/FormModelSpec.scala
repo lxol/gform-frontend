@@ -807,6 +807,50 @@ class FormModelSpec extends AnyFlatSpecLike with Matchers with FormModelSupport 
     }
   }
 
+  it should "576" in {
+
+    val fcA = mkFormComponent("a", Text(PositiveNumber(), Value))
+    val fcB = mkFormComponent("b", Text(PositiveNumber(), Value))
+    val fcC = mkFormComponent("c", Text(Sterling(RoundingMode.Up, true), Add(FormCtx("a"), FormCtx("b"))))
+      .copy(label = toSmartStringExpression("", Add(FormCtx("a"), FormCtx("b"))))
+
+    val section1 = mkSection(List(fcA))
+    val section2 = mkSection(List(fcB))
+    val section3 = mkSection(List(fcC))
+
+    val sections = List(
+      section1,
+      section2,
+      section3
+    )
+
+    val fmb = mkFormModelFromSections(sections)
+
+    val table = Table(
+      ("data", "expected"),
+      (
+        variadicFormData[SourceOrigin.OutOfDate]("a" -> "10", "b" -> "20", "c" -> "5"),
+        Map(
+          FormCtx("a") -> NumberResult(10.00),
+          FormCtx("b") -> NumberResult(20.00)
+        )
+      ),
+      (
+        variadicFormData[SourceOrigin.OutOfDate]("a" -> "dssd", "b" -> "20", "c" -> "5"),
+        Map(
+          FormCtx("a") -> Invalid("Number - cannot convert 'dssd' to number"),
+          FormCtx("b") -> NumberResult(20.00)
+        )
+      )
+    )
+
+    forAll(table) { case (data, expected) =>
+      val res: FormModelVisibilityOptics[DataOrigin.Mongo] =
+        fmb.visibilityModel[DataOrigin.Mongo, SectionSelectorType.Normal](data, None)
+      res.evaluationResults.exprMap shouldBe expected
+    }
+  }
+
 }
 
 object StaticTypeInfoBuilder {

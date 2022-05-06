@@ -370,7 +370,7 @@ class EvaluationResultsSpec extends Spec with TableDrivenPropertyChecks {
         ),
         buildEvaluationContext(indexedComponentIds =
           List(
-            FormComponentId("1_addToListNumField").modelComponentId //,
+            FormComponentId("1_addToListNumField").modelComponentId
           )
         ),
         NumberResult(3),
