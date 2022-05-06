@@ -69,7 +69,8 @@ case class EvaluationResults(
       ListResult(
         exprMap
           .collect {
-            case (FormCtx(c), r) if c.baseComponentId === modelComponentId.baseComponentId =>
+            case (FormCtx(c), r)
+                if c.baseComponentId === modelComponentId.baseComponentId && c.modelComponentId.maybeIndex.nonEmpty =>
               (c.modelComponentId, r)
           }
           .toList
