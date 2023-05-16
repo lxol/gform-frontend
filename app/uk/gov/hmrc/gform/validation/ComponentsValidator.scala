@@ -164,6 +164,7 @@ class ComponentsValidator[D <: DataOrigin, F[_]: Monad](
     formComponent.`type` match {
       case date @ Date(_, _, _) =>
         validIf(
+          // TODO: GFORMS-2161
           dateValidation.validateDate(
             formComponent,
             date
@@ -316,4 +317,18 @@ object ComponentsValidatorHelper {
         .getOrElse(messages(messageKey, withDescriptor: _*))
     )
   }
+
+  def errorShortNameStartWithFallback(fieldValue: FormComponent)(implicit
+    sse: SmartStringEvaluator
+  ): String =
+    fieldValue.errorShortNameStart.flatMap(_.nonBlankValue()) orElse
+      fieldValue.shortName.flatMap(_.nonBlankValue()) getOrElse
+      fieldValue.label.value()
+
+  def errorShortNameWithFallback(fieldValue: FormComponent)(implicit
+    sse: SmartStringEvaluator
+  ): String =
+    fieldValue.errorShortName.flatMap(_.nonBlankValue()) orElse
+      fieldValue.shortName.flatMap(_.nonBlankValue()) getOrElse
+      fieldValue.label.value()
 }

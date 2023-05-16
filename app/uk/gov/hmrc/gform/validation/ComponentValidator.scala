@@ -31,6 +31,7 @@ import uk.gov.hmrc.gform.sharedmodel.form.ThirdPartyData
 import uk.gov.hmrc.gform.sharedmodel.formtemplate._
 import uk.gov.hmrc.gform.sharedmodel.{ LangADT, LocalisedString, SubmissionRef }
 import uk.gov.hmrc.gform.validation.ValidationServiceHelper.{ validationFailure, validationSuccess }
+import uk.gov.hmrc.gform.validation.ComponentsValidatorHelper.{ errorShortNameStartWithFallback, errorShortNameWithFallback }
 import uk.gov.hmrc.gform.validation.ValidationUtil.ValidatedType
 import uk.gov.hmrc.referencechecker.{ CorporationTaxReferenceChecker, VatReferenceChecker }
 
@@ -111,6 +112,20 @@ object ComponentValidator {
   val genericErrorTextExactDigits                            = "generic.error.text.exactDigits"
   val genericErrorTextValidChar                              = "generic.error.text.valid.char"
   val genericErrorShortTextValidChar                         = "generic.error.shortText.valid.char"
+
+  val genericErrorDateRequired                               =  "generic.error.date.required"
+  val genericErrorDayRequired                                =  "generic.error.day.required"
+  val genericErrormonthRequired                              =  "generic.error.month.required"
+  val genericErrorYearRequired                               =  "generic.error.year.required"
+  val genericErrorDateReal                                   =  "generic.error.date.real"
+  val genericErrorDatePast                                   =  "generic.error.date.past"
+  val genericErrorDateTodayPast                              =  "generic.error.date.today.past"
+  val genericErrorDateFuture                                 =  "generic.error.date.future"
+  val genericErrorDateTodayFuture                            =  "generic.error.date.today.future"
+  val genericErrorDateAfter                                  =  "generic.error.date.after"
+  val genericErrorDateBefore                                 =  "generic.error.date.before"
+  val genericErrorDateFirst                                  =  "generic.error.date.first"
+  val genericErrorDateLast                                   =  "generic.error.date.last"
   // format: on
 
   val ukSortCodeFormat = """^[^0-9]{0,2}\d{2}[^0-9]{0,2}\d{2}[^0-9]{0,2}\d{2}[^0-9]{0,2}$""".r
@@ -1084,20 +1099,6 @@ object ComponentValidator {
           List(errorShortNameStartWithFallback(fieldValue))
         )
       }
-
-  private def errorShortNameStartWithFallback(fieldValue: FormComponent)(implicit
-    sse: SmartStringEvaluator
-  ): String =
-    fieldValue.errorShortNameStart.flatMap(_.nonBlankValue()) orElse
-      fieldValue.shortName.flatMap(_.nonBlankValue()) getOrElse
-      fieldValue.label.value()
-
-  private def errorShortNameWithFallback(fieldValue: FormComponent)(implicit
-    sse: SmartStringEvaluator
-  ): String =
-    fieldValue.errorShortName.flatMap(_.nonBlankValue()) orElse
-      fieldValue.shortName.flatMap(_.nonBlankValue()) getOrElse
-      fieldValue.label.value()
 
   def validateChoice[D <: DataOrigin](
     fieldValue: FormComponent

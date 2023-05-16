@@ -87,6 +87,7 @@ object DateValidationLogic {
       case _                                                        => ""
     }
 
+    //TODO: GFORMS-2161:
     val dayString = concreteDate.day match {
       case Day.Exact(day) => messages("date.exactDay", s"$day${messages(s"date.ordinal.$day")}")
       case Day.First      => messages("date.firstDay")
@@ -101,6 +102,7 @@ object DateValidationLogic {
 
     val result = s"date.${beforeAfterPrecisely.mkString}"
 
+    lxol.pp.log(s"incorrectDateMessage: $result, $vars")
     MessageKeyWithVars(result.trim, Some(vars))
   }
 
@@ -112,30 +114,36 @@ object DateValidationLogic {
   def hasMaximumLength(str: String, maximumLength: Int, label: String)(implicit
     messages: Messages
   ): Validated[String, String] =
+    // TODO: GFORMS-2161: INVALID
     if (str.length > maximumLength) Invalid(messages(genericErrorMaxLength, label, maximumLength))
     else Valid(str)
 
   def isNumeric(str: String, timeUnitLabel: String, label: String)(implicit messages: Messages): ValidatedNumeric =
+    // GFORMS-2161: INVALID
     if (str.isEmpty) Invalid(messages("field.error.required", label))
     else
       Try(str.toInt) match {
         case Success(x) => Valid(x)
+        //GFORMS-2161: INVALID
         case Failure(_) => Invalid(messages("field.error.number", timeUnitLabel))
       }
 
   def isWithinBounds(number: Int, dayOrMonth: Int, label: String)(implicit messages: Messages): ValidatedNumeric =
     number match {
       case x if number <= dayOrMonth => Valid(number)
-      case y if number > dayOrMonth  => Invalid(messages("field.error.notGreaterThan", label, dayOrMonth))
+      // TODO: GFORMS-2161: INVALID
+      case y if number > dayOrMonth => Invalid(messages("generic.error.day.required"))
     }
 
   def hasValidNumberOfDigits(number: Int, digits: Int, label: String)(implicit messages: Messages): ValidatedNumeric =
     number.toString.length match {
       case x if x === digits => Valid(number)
+      // TDODO GFOMRS-2161: INVALID
       case y if y =!= digits => Invalid(messages("field.error.exactDigits", label, digits))
     }
 
   def isNotEmpty(str: String, label: String)(implicit messages: Messages): Validated[String, String] =
+    // TODO: GFORMS-2161: INVALID
     if (str.trim === "") Invalid(messages("field.error.required", label))
     else Valid(str)
 

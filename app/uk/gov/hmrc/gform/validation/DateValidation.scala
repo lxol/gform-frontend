@@ -28,9 +28,13 @@ import uk.gov.hmrc.gform.eval.smartstring._
 import uk.gov.hmrc.gform.typeclasses.Now
 import uk.gov.hmrc.gform.validation.ValidationServiceHelper._
 import uk.gov.hmrc.gform.validation.ValidationUtil._
-import uk.gov.hmrc.gform.validation.DateValidationLogic._
+// import uk.gov.hmrc.gform.validation.DateValidationLogic._
+import uk.gov.hmrc.gform.validation.DateValidationLogic.MessageKeyWithVars
 import uk.gov.hmrc.gform.validation.ComponentsValidatorHelper.{ errors, fieldDescriptor }
+import uk.gov.hmrc.gform.validation.ComponentsValidatorHelper.errorShortNameStartWithFallback
+// import uk.gov.hmrc.gform.validation.ComponentsValidatorHelper.errorShortNameWithFallback
 import uk.gov.hmrc.gform.validation.ValidationServiceHelper.validationSuccess
+import uk.gov.hmrc.gform.sharedmodel.SmartString
 
 import scala.annotation.nowarn
 import scala.util.{ Failure, Success, Try }
@@ -49,6 +53,7 @@ class DateValidation[D <: DataOrigin](formModelVisibilityOptics: FormModelVisibi
     if (fieldValue.mandatory) {
       Monoid[ValidatedType[Unit]].combineAll(
         List(
+          // TODO: GFORMS-2161
           checkAnyFieldsEmpty(fieldValue),
           validateDateImpl(fieldValue, date)
         )
@@ -57,6 +62,7 @@ class DateValidation[D <: DataOrigin](formModelVisibilityOptics: FormModelVisibi
       checkAllFieldsEmpty(fieldValue) orElse validateDateImpl(fieldValue, date)
     }
 
+  // TODO: GFORMS-2161: check all calls
   private def validationFailed[T](
     formComponent: FormComponent,
     messageKey: String,
@@ -66,10 +72,21 @@ class DateValidation[D <: DataOrigin](formModelVisibilityOptics: FormModelVisibi
       formComponent.firstAtomModelComponentId -> errors(formComponent, messageKey, vars)
     ).invalid
 
-  private def requiredError(formComponent: FormComponent, modelComponentId: ModelComponentId): ValidatedType[Unit] =
+  private def requiredError(formComponent: FormComponent, modelComponentId: ModelComponentId): ValidatedType[Unit] = {
+    val placeHolder1 = formComponent.errorShortName
+      .flatMap(_.nonBlankValue())
+      .getOrElse(SmartString.blank.trasform(_ => "a date", _ => "ddyddiad").value())
+    val placeHolder2 = formComponent.errorExample.flatMap(_.nonBlankValue()).map(s => s", $s").getOrElse("")
+    // TODO: GFORMS-2161: INVALID DONE
     Map[ModelComponentId, Set[String]](
-      modelComponentId -> errors(formComponent, "field.error.required", None, "")
+      modelComponentId -> errors(
+        formComponent,
+        "generic.error.date.required",
+        Some(List(placeHolder1, placeHolder2)),
+        ""
+      )
     ).invalid
+  }
 
   private def checkAnyFieldsEmpty(
     fieldValue: FormComponent
@@ -139,8 +156,11 @@ class DateValidation[D <: DataOrigin](formModelVisibilityOptics: FormModelVisibi
       .andThen { inputDate =>
         if (validateConcreteDate(concreteDate, beforeAfterPrecisely, inputDate, offset)) validationSuccess
         else {
-          val messageKeyWithVars: MessageKeyWithVars = incorrectDateMessage(beforeAfterPrecisely, concreteDate, offset)
-          validationFailed(formComponent, messageKeyWithVars.messageKey, messageKeyWithVars.vars)
+          val messageKeyWithVars: MessageKeyWithVars =
+            DateValidationLogic.incorrectDateMessage(beforeAfterPrecisely, concreteDate, offset)
+          //TODO: GFORMS-2161: INVALID DONE
+          val vars = messageKeyWithVars.vars.map(errorShortNameStartWithFallback(formComponent) :: _)
+          validationFailed(formComponent, messageKeyWithVars.messageKey, vars)
         }
       }
 
@@ -176,8 +196,15 @@ class DateValidation[D <: DataOrigin](formModelVisibilityOptics: FormModelVisibi
           validationSuccess
         else {
           val messageKeyWithVars: MessageKeyWithVars =
-            incorrectDateMessage(beforeAfterPrecisely, localDateToConcreteDate(otherLocalDate), offset)
-          validationFailed(fieldValue, messageKeyWithVars.messageKey, messageKeyWithVars.vars)
+            //TODO: GFORMS-2161: INVALID
+            DateValidationLogic.incorrectDateMessage(
+              beforeAfterPrecisely,
+              DateValidationLogic.localDateToConcreteDate(otherLocalDate),
+              offset
+            )
+
+          val vars = messageKeyWithVars.vars.map(errorShortNameStartWithFallback(fieldValue) :: _)
+          validationFailed(fieldValue, messageKeyWithVars.messageKey, vars)
         }
       }
     }
@@ -236,6 +263,7 @@ class DateValidation[D <: DataOrigin](formModelVisibilityOptics: FormModelVisibi
   ): ValidatedType[Unit] = {
     val nowWithOffset = now.apply().plusDays(offset.value.toLong)
     if (beforeAfterPrecisely.datePredicate(date, nowWithOffset)) validationSuccess
+    // TODO: GFORMS-2161: INVALID
     else validationFailed(formComponent, s"date.${beforeAfterPrecisely.mkString}", Some(messages("date.today") :: Nil))
   }
 
@@ -250,7 +278,8 @@ class DateValidation[D <: DataOrigin](formModelVisibilityOptics: FormModelVisibi
         validateLocalDate(formComponent, day, month, year).andThen { case SomeDate(concYear, concMonth, concDay) =>
           Try(LocalDate.of(concYear, concMonth, concDay)) match {
             case Success(date) => Valid(date)
-            case Failure(ex)   => validationFailed(formComponent, "date.invalid", None)
+            //TODO: GFORMS-2161: INVALID
+            case Failure(ex) => validationFailed(formComponent, "date.invalid", None)
           }
         }
 
@@ -275,23 +304,26 @@ class DateValidation[D <: DataOrigin](formModelVisibilityOptics: FormModelVisibi
     val dayLabel = label + " " + messages("date.day")
     val monthLabel = label + " " + messages("date.month")
     val yearLabel = label + " " + messages("date.year")
-    val d = isNotEmpty(day, dayLabel)
-      .andThen(_ => hasMaximumLength(day, 2, dayLabel))
-      .andThen(_ => isNumeric(day, dayLabel, label))
-      .andThen(y => isWithinBounds(y, 31, dayLabel))
+    val d = DateValidationLogic
+      .isNotEmpty(day, dayLabel)
+      .andThen(_ => DateValidationLogic.hasMaximumLength(day, 2, dayLabel))
+      .andThen(_ => DateValidationLogic.isNumeric(day, dayLabel, label))
+      .andThen(y => DateValidationLogic.isWithinBounds(y, 31, dayLabel))
       .leftMap(er => Map(errorGranularity(Date.day) -> Set(errorMessage.getOrElse(er))))
-    val m = isNotEmpty(month, monthLabel)
-      .andThen(_ => hasMaximumLength(month, 2, monthLabel))
-      .andThen(_ => isNumeric(month, monthLabel, label))
-      .andThen(y => isWithinBounds(y, 12, monthLabel))
+    val m = DateValidationLogic
+      .isNotEmpty(month, monthLabel)
+      .andThen(_ => DateValidationLogic.hasMaximumLength(month, 2, monthLabel))
+      .andThen(_ => DateValidationLogic.isNumeric(month, monthLabel, label))
+      .andThen(y => DateValidationLogic.isWithinBounds(y, 12, monthLabel))
       .leftMap(er => Map(errorGranularity(Date.month) -> Set(errorMessage.getOrElse(er))))
-    val y = isNotEmpty(year, yearLabel)
-      .andThen(_ => hasMaximumLength(year, 4, yearLabel))
-      .andThen(_ => isNumeric(year, yearLabel, label))
-      .andThen(y => hasValidNumberOfDigits(y, 4, yearLabel))
+    val y = DateValidationLogic
+      .isNotEmpty(year, yearLabel)
+      .andThen(_ => DateValidationLogic.hasMaximumLength(year, 4, yearLabel))
+      .andThen(_ => DateValidationLogic.isNumeric(year, yearLabel, label))
+      .andThen(y => DateValidationLogic.hasValidNumberOfDigits(y, 4, yearLabel))
       .leftMap(er => Map(errorGranularity(Date.year) -> Set(errorMessage.getOrElse(er))))
 
-    parallelWithApplicative(d, m, y)(SomeDate.apply)
+    DateValidationLogic.parallelWithApplicative(d, m, y)(SomeDate.apply)
   }
 }
 

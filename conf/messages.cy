@@ -161,6 +161,21 @@ generic.error.text.exactDigits=Mae {1} yn gorfod bod yn {2} o gymeriadau
 generic.error.text.valid.char=Mae {2} yn gorfod peidio â chynnwys {1}
 generic.error.shortText.valid.char=Mae {1} yn gorfod cynnwys llythrennau, rhifau, bylchau, cysylltnodau, ampersandau a chollnodau yn unig
 
+#GFORMS-2161:
+generic.error.date.required=Nodwch {1}{2}
+generic.error.day.required=Nodwch ddiwrnod yn y fformat cywir
+generic.error.month.required=Nodwch fis yn y fformat cywir
+generic.error.year.required=Nodwch flwyddyn yn y fformat cywir
+generic.error.date.real=Mae dyddiad yn gorfod bod yn ddyddiad go iawn@
+generic.error.date.past=Mae dyddiad yn gorfod bod yn y gorffennol
+generic.error.date.today.past=Mae dyddiad yn gorfod bod heddiw neu yn y gorffennol
+generic.error.date.future=Mae dyddiad yn gorfod bod yn y dyfodol
+generic.error.date.today.future=Mae dyddiad yn gorfod bod heddiw neu yn y dyfodol
+generic.error.date.after=Mae dyddiad yn gorfod bod ar ôl [date]
+generic.error.date.before=Mae dyddiad yn gorfod bod cyn [date]
+generic.error.date.first=Mae dyddiad yn gorfod bod ar ddiwrnod cyntaf y mis
+generic.error.date.last=Mae dyddiad yn gorfod bod ar ddiwrnod olaf y mis
+
 generic.error.submissionRef=Ni ellir dod o hyd i {0}. Nodwch {0} dilys yn y fformat cywir. Mae’n rhaid i hyn fod yn 14 o gymeriadau a chynnwys rhifau, cysylltnodau a phriflythrennau yn unig, er enghraifft ABCD-1234-1234
 generic.error.parentSubmissionRefSameAsFormSubmissionRef=Mae’n rhaid i {0} fod yn gyfeirnod cyflwyno ffurflen rhiant. Yr hyn a nodwyd yw cyfeirnod cyflwyno’r ffurflen hon.
 
@@ -280,9 +295,9 @@ date.exactDay=y {0}
 date.inYear=yn {0}
 date.inMonth=ym mis {0}
 date.ofMonth=o {0}
-date.before=Rhaid i {0} fod cyn {1}
-date.after=Rhaid i {0} fod ar ôl {1}
-date.precisely=Rhaid i {0} fod {1}
+date.before=Rhaid i {1} fod cyn {2}
+date.after=Rhaid i {1} fod ar ôl {2}
+date.precisely=Rhaid i {1} fod {2}
 date.isMissing={0} ar goll
 date.invalid=Rhaid i’r {0} fod yn ddyddiad dilys
 date.today=heddiw
